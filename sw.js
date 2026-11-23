@@ -1,7 +1,7 @@
 /* Service worker: doar fisierele aplicatiei. Lectia (sunetul) merge direct intre telefon si OpenAI. */
-const VERSIUNE = 'engleza-v4';
+const VERSIUNE = 'engleza-v5';
 const FISIERE = [
-  './', 'index.html', 'app.css?v=4', 'app.js?v=4', 'manifest.webmanifest',
+  './', 'index.html', 'app.css?v=5', 'app.js?v=5', 'manifest.webmanifest',
   'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png',
   'fonts/Rubik-500-latin.woff2', 'fonts/Rubik-500-latin-ext.woff2', 'fonts/Rubik-600-latin.woff2', 'fonts/Rubik-600-latin-ext.woff2',
   'fonts/Lexend-400-latin.woff2', 'fonts/Lexend-400-latin-ext.woff2', 'fonts/Lexend-500-latin.woff2', 'fonts/Lexend-500-latin-ext.woff2',
