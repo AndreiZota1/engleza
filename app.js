@@ -237,7 +237,10 @@ async function imperecheaza(p) {
     localStorage.setItem(CHEIE_CFG, JSON.stringify(cfg));
     toast('Gata, telefonul e legat de Mac.');
     return true;
-  } catch (e) { toast(e.message, true); return false; }
+  } catch (e) {
+    toast(cfg ? 'Browserul ăsta e deja legat de Mac; linkul nu mai trebuie.' : e.message, !cfg);
+    return !!cfg;
+  }
 }
 function ecranNelegat() {
   $('#main').innerHTML = '<div class="gol-mare"><div class="gol-icon">' + ICON.chat + '</div><h2>Aplicația nu e legată de Mac</h2><p class="text-2">Deschide pe telefonul ăsta linkul de împerechere primit de la Claude. Dacă ai Panoul Safe Ads în același Chrome, deschide-l o dată pe el: legătura e comună.</p></div>';
