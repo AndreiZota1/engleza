@@ -512,7 +512,7 @@ async function vedereParcurs(id) {
   const dif = cur - (p.plan || 1);
   const ritm = cur === 0 ? 'începe cu testul de nivel' : dif > 0 ? 'în avans cu ' + dif + (dif === 1 ? ' unitate' : ' unități') + ' față de plan' : dif < 0 ? 'în urmă cu ' + (-dif) + (dif === -1 ? ' unitate' : ' unități') + ' față de plan' : 'exact pe plan';
   const fmt = (d) => new Date(d).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' });
-  let h = '<section class="card parcurs-cap"><div class="rand"><div><span class="eticheta">Programul de 20 de unități</span><h2>' + (cur >= 1 && cur <= 20 ? 'Unitatea ' + cur + ' din 20' : cur > 20 ? 'Program terminat' : 'Testul de nivel') + '</h2><p class="mic ' + (dif > 0 ? 'bine' : dif < 0 ? 'rau' : '') + '">' + esc(ritm) + '</p></div>' + inel(prog, Math.round(prog * 100) + '%', 'parcurs') + '</div>' +
+  let h = '<section class="card parcurs-cap"><div class="rand"><div><span class="eticheta">Programul de 20 de unități</span><h2>' + (cur >= 1 && cur <= 20 ? 'Unitatea ' + cur + ' din 20' : cur > 20 ? 'Program terminat' : 'Testul de nivel') + '</h2><p class="mic ' + (cur === 0 ? '' : dif > 0 ? 'bine' : dif < 0 ? 'rau' : '') + '">' + esc(ritm) + '</p></div>' + inel(prog, Math.round(prog * 100) + '%', 'parcurs') + '</div>' +
     '<p class="mic">Treci la unitatea următoare după ce lucrezi, nu după calendar. Planul: câte o unitate pe săptămână, ' + (p.inceput ? fmt(p.inceput) + ' – ' + fmt(p.sfarsit) : '') + '.</p></section>';
   h += '<div class="harta" id="harta"></div>';
   $('#main').innerHTML = h;
