@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; media-src 'self' blob: mediastream:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://api.openai.com https://*.ngrok-free.app https://*.ngrok-free.dev https://*.ngrok.app https://*.ngrok.dev http://127.0.0.1:8095; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>English</title>
+<meta name="description" content="Lecții de engleză vorbită, cu profesor pe voce.">
+<meta name="theme-color" content="#0D1C2B">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="app.css?v=1">
+</head>
+<body>
+<header class="sus">
+  <div class="sus-titlu"><span class="marca" aria-hidden="true"></span><h1>English</h1></div>
+  <span id="chip-sapt" class="chip-sus"></span>
+</header>
+<main id="main" tabindex="-1"></main>
+<audio id="sunet" autoplay playsinline></audio>
+<div id="strat" class="strat" hidden></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="app.js?v=1"></script>
+</body>
+</html>
