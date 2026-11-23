@@ -505,3 +505,22 @@ body.in-lectie .toast { bottom: calc(20px + env(safe-area-inset-bottom)); }
 .fraza-text small { color: var(--text-3); font-size: 12px; }
 .fraza-butoane { display: flex; gap: 6px; flex: none; }
 .banda-checkpoint.albastru { border-color: rgba(90, 140, 212, 0.45); background: var(--albastru-fond); color: var(--albastru); text-decoration: none; }
+
+/* ---------- v4 (23.11): unitatea curentă, cele 7 zile, progres pe hartă ---------- */
+.unitate-card h3 { margin-top: 2px; }
+.unitate-card .inel { width: 76px; height: 76px; }
+.unitate-card .inel-text b { font-size: 15px; }
+.unitate-card .mic.bine { color: var(--lime-2); }
+.unitate-card .mic.rau { color: var(--rau); }
+.zile-sir { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 10px; }
+.zi-punct { display: grid; justify-items: center; gap: 4px; }
+.zi-punct span { width: 30px; height: 30px; border-radius: 10px; background: var(--linie); }
+.zi-punct.deschis span { background: var(--lime-fond); border: 1px dashed var(--lime); }
+.zi-punct.exersat span { background: var(--lime); box-shadow: 0 0 10px rgba(151, 195, 62, 0.45); }
+.zi-punct small { color: var(--text-3); font-size: 11.5px; }
+.legenda-zile .cel.exersat { background: var(--lime); }
+.legenda-zile .cel.deschis, .col-zile span.deschis { background: var(--lime-fond); outline: 1px dashed var(--lime); outline-offset: -1px; }
+.legenda-zile { flex-wrap: wrap; }
+.nod-progres { fill: none; stroke: var(--lime); stroke-width: 4; stroke-linecap: round; }
+.parcurs-cap .mic.bine { color: var(--lime-2); }
+.parcurs-cap .mic.rau { color: var(--rau); }

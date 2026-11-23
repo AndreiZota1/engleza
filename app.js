@@ -212,6 +212,52 @@ function legaPlanul(s) {
     };
   });
 }
+function ritmFataDePlan(s) {
+  const d = (s.saptamana || 1) - (s.plan_saptamana || 1);
+  if (d > 0) return { text: 'în avans cu ' + d + (d === 1 ? ' unitate' : ' unități') + ' față de plan', clasa: 'bine' };
+  if (d < 0) return { text: 'în urmă cu ' + (-d) + (d === -1 ? ' unitate' : ' unități') + ' față de plan', clasa: 'rau' };
+  return { text: 'exact pe plan', clasa: '' };
+}
+function cardUnitate(s) {
+  const u = s.unitate;
+  if (!u) return '';
+  const pr = s.praguri || { vorbit: 45, test: 70, fraze: 10, scris: 10 };
+  const it = [
+    { ok: u.vorbit_min >= pr.vorbit, t: 'Vorbește pe tema unității', d: u.vorbit_min + ' din ' + pr.vorbit + ' de minute', act: 'vorbit' },
+    { ok: u.test >= pr.test, t: 'Testul pe temă', d: u.test ? 'cel mai bun: ' + u.test + '% (minim ' + pr.test + '%)' : 'minim ' + pr.test + '%', act: 'test' },
+    { ok: u.fraze >= pr.fraze, t: 'Frazele unității', d: u.fraze >= pr.fraze ? 'ascultate' : 'ascultă lista o dată, cap-coadă', act: 'fraze' },
+    { ok: u.scris >= pr.scris, t: 'Scrie cu profesorul', d: u.scris + ' din ' + pr.scris + ' mesaje', act: 'scris' },
+  ];
+  if (u.checkpoint) it.push({ ok: !!u.examen, t: 'Testul vorbit de checkpoint', d: u.examen ? 'făcut: ' + u.examen.cefr : '10 minute, obligatoriu ca să treci mai departe', act: 'examen' });
+  const r = ritmFataDePlan(s);
+  return '<section class="card unitate-card"><div class="rand"><div><span class="eticheta">Unitatea ' + u.n + ' din 20' + (u.checkpoint ? ' · checkpoint' : '') + '</span><h3>Ca s-o termini</h3></div>' +
+    inel(u.procent / 100, u.procent + '%', 'gata') + '</div><ul class="plan-lista">' +
+    it.map((x) => '<li class="' + (x.ok ? 'facut' : '') + '" data-unit="' + x.act + '"><span class="plan-bifa">' + (x.ok ? ICON.bifa : '') + '</span><span class="plan-text"><b>' + esc(x.t) + '</b><small>' + esc(x.d) + '</small></span></li>').join('') +
+    '</ul><p class="mic ' + r.clasa + '">Treci la unitatea următoare când ajungi la 85%' + (u.checkpoint ? ' și ai făcut testul vorbit' : '') + '. Acum ești ' + esc(r.text) + '.</p></section>';
+}
+function legaUnitatea() {
+  $$('[data-unit]').forEach((li) => {
+    li.onclick = () => {
+      const a = li.dataset.unit;
+      if (a === 'vorbit') pornesteLectia({ mod: 'lectie' });
+      else if (a === 'test') location.hash = '#/test/tema';
+      else if (a === 'fraze') location.hash = '#/fraze';
+      else if (a === 'scris') location.hash = '#/scris';
+      else if (a === 'examen') pornesteLectia({ mod: 'test' });
+    };
+  });
+}
+const ZILE_SCURT = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+function zileleTale(s) {
+  const z = (s.zile || []).slice(-7);
+  if (!z.length) return '';
+  const ex = z.filter((x) => x.exersat).length;
+  return '<section class="card zile-card"><div class="rand"><h3>Ultimele 7 zile</h3><span class="mic">ai exersat ' + ex + ' din 7</span></div><div class="zile-sir">' +
+    z.map((x) => { const d = new Date(x.zi + 'T12:00:00'); const cls = x.exersat ? 'exersat' : x.deschis ? 'deschis' : 'gol';
+      const tit = d.toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'short' }) + ': ' + (x.exersat ? (x.minute ? x.minute + ' min vorbit' : 'ai exersat') + (x.teste ? ', ' + x.teste + ' test' : '') + (x.carduri ? ', ' + x.carduri + ' cartonașe' : '') : x.deschis ? 'doar ai deschis aplicația' : 'n-ai folosit aplicația');
+      return '<div class="zi-punct ' + cls + '" title="' + esc(tit) + '"><span></span><small>' + ZILE_SCURT[d.getDay()] + '</small></div>'; }).join('') +
+    '</div><div class="legenda-zile"><span class="cel exersat"></span><span class="mic">ai exersat</span><span class="cel deschis"></span><span class="mic">doar ai intrat</span><span class="cel"></span><span class="mic">n-ai folosit-o</span></div></section>';
+}
 function cardNivelDeInceput() {
   return '<section class="card inceput"><span class="eticheta">Primul pas</span><h2>Află-ți nivelul</h2>' +
     '<p class="text-2">Programul tău de 20 de săptămâni a pornit azi. Ca să-l potrivesc pe tine, începe cu testul de nivel: întâi cel scris, apoi cel vorbit.</p>' +
@@ -392,20 +438,22 @@ async function vedereAcasa(id) {
   S.drum = drum;
   const ultima = (s.lectii || [])[0];
   const procentAzi = (s.minute_azi || 0) / Math.max(5, setari.obiectiv || 30);
-  const prog = s.saptamana >= 1 ? Math.min(1, s.saptamana / 20) : 0;
+  const prog = Math.min(1, ((s.unitati_gata || 0) + ((s.unitate && s.unitate.procent) || 0) / 100) / 20);
   let h = '<section class="erou">' +
     '<div class="erou-sus"><div class="erou-text"><p class="salut">' + salut() + ', Andrei</p>' +
-    '<h2>' + (s.saptamana >= 1 && s.saptamana <= 20 ? 'Săptămâna ' + s.saptamana + ' · ' + esc(s.faza_nume || '') : 'Englezul tău') + '</h2>' +
+    '<h2>' + (s.saptamana >= 1 && s.saptamana <= 20 ? 'Unitatea ' + s.saptamana + ' · ' + esc(s.faza_nume || '') : 'Englezul tău') + '</h2>' +
     '<p class="tema">' + esc(s.tema || 'Free conversation') + '</p></div>' +
     '<div class="nivel"><b>' + esc(s.nivel || '?') + '</b><span>nivel</span></div></div>' +
     '<div class="erou-jos">' + inel(procentAzi, (s.minute_azi || 0) + ' min', 'din ' + (setari.obiectiv || 30) + ' azi') +
     '<div class="erou-cifre"><div class="cifra-erou' + ((s.serie || 0) > 0 ? ' aprinsa' : '') + '">' + ICON.flacara + '<b>' + (s.serie || 0) + '</b><span>' + ((s.serie || 0) === 1 ? 'zi la rând' : 'zile la rând') + '</span></div>' +
     '<div class="cifra-erou xp"><b>' + new Intl.NumberFormat('ro-RO').format(s.xp || 0) + '</b><span>XP</span></div>' +
     '<div class="bara-program" role="img" aria-label="' + Math.round(prog * 100) + '% din program"><span data-w="' + (prog * 100).toFixed(1) + '"></span></div>' +
-    '<span class="mic-erou">' + (s.saptamana >= 1 && s.saptamana <= 20 ? 'săptămâna ' + s.saptamana + ' din 20' : '') + '</span></div></div>' +
+    '<span class="mic-erou">' + (s.saptamana >= 1 && s.saptamana <= 20 ? (s.unitati_gata || 0) + ' din 20 de unități terminate · ' + esc(ritmFataDePlan(s).text) : '') + '</span></div></div>' +
     (s.checkpoint ? '<button class="banda-checkpoint" id="checkpoint">' + ICON.trofeu + '<span>Săptămână de checkpoint: fă testul vorbit</span></button>' : '') +
     '</section>';
   if (!s.are_nivel) h += cardNivelDeInceput();
+  h += cardUnitate(s);
+  h += zileleTale(s);
   h += planulZilei(s);
 
   h += '<section class="panou-start"><div class="moduri">' +
@@ -433,6 +481,7 @@ async function vedereAcasa(id) {
   const pv = $('#pas-vorbit'); if (pv) pv.onclick = () => pornesteLectia({ mod: 'test' });
   const ct = $('#card-tinta'); if (ct) ct.onclick = foaieSetari;
   legaPlanul(s);
+  legaUnitatea();
   const ul = $('[data-lectie]'); if (ul) ul.onclick = () => { location.hash = '#/lectie/' + ul.dataset.lectie; };
 }
 function tile(href, icon, t, d, nr) {
@@ -457,9 +506,14 @@ async function vedereParcurs(id) {
   if (id !== S.randare) return;
   const p = S.parcurs;
   const cur = p.curenta;
-  const prog = Math.min(1, Math.max(0, cur / 20));
-  let h = '<section class="card parcurs-cap"><div class="rand"><div><span class="eticheta">Programul de 20 de săptămâni</span><h2>' + (cur >= 1 && cur <= 20 ? 'Săptămâna ' + cur + ' din 20' : cur > 20 ? 'Program terminat' : 'Testul de nivel') + '</h2></div>' + inel(prog, Math.round(prog * 100) + '%', 'parcurs') + '</div>' +
-    '<p class="mic">5 oct. 2026 – 21 feb. 2027 · checkpoint-uri în săptămânile 5, 10, 15 și 20</p></section>';
+  const gata = p.saptamani.filter((w) => w.n > 0 && w.progres && w.progres.gata).length;
+  const curW = p.saptamani.find((w) => w.n === cur);
+  const prog = Math.min(1, (gata + (curW && curW.progres ? curW.progres.procent / 100 : 0)) / 20);
+  const dif = cur - (p.plan || 1);
+  const ritm = cur === 0 ? 'începe cu testul de nivel' : dif > 0 ? 'în avans cu ' + dif + (dif === 1 ? ' unitate' : ' unități') + ' față de plan' : dif < 0 ? 'în urmă cu ' + (-dif) + (dif === -1 ? ' unitate' : ' unități') + ' față de plan' : 'exact pe plan';
+  const fmt = (d) => new Date(d).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' });
+  let h = '<section class="card parcurs-cap"><div class="rand"><div><span class="eticheta">Programul de 20 de unități</span><h2>' + (cur >= 1 && cur <= 20 ? 'Unitatea ' + cur + ' din 20' : cur > 20 ? 'Program terminat' : 'Testul de nivel') + '</h2><p class="mic ' + (dif > 0 ? 'bine' : dif < 0 ? 'rau' : '') + '">' + esc(ritm) + '</p></div>' + inel(prog, Math.round(prog * 100) + '%', 'parcurs') + '</div>' +
+    '<p class="mic">Treci la unitatea următoare după ce lucrezi, nu după calendar. Planul: câte o unitate pe săptămână, ' + (p.inceput ? fmt(p.inceput) + ' – ' + fmt(p.sfarsit) : '') + '.</p></section>';
   h += '<div class="harta" id="harta"></div>';
   $('#main').innerHTML = h;
   deseneazaHarta(p);
@@ -499,11 +553,18 @@ function deseneazaHarta(p) {
     s += '<g class="' + cls + '" data-sapt="' + w.n + '" tabindex="0" role="button" aria-label="Săptămâna ' + w.n + ': ' + esc(w.tema || '') + '">';
     if (w.stare === 'curenta') s += '<circle class="nod-puls" cx="' + q.x.toFixed(1) + '" cy="' + q.y + '" r="' + (r + 6) + '"/>';
     s += '<circle class="nod-cerc" cx="' + q.x.toFixed(1) + '" cy="' + q.y + '" r="' + r + '"/>';
+    if (w.progres && w.progres.procent > 0 && !w.progres.gata) {
+      const c = 2 * Math.PI * (r + 5), f = Math.min(1, w.progres.procent / 100);
+      s += '<circle class="nod-progres" cx="' + q.x.toFixed(1) + '" cy="' + q.y + '" r="' + (r + 5) + '" stroke-dasharray="' + (c * f).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 ' + q.x.toFixed(1) + ' ' + q.y + ')"/>';
+    }
     s += '<text class="nod-nr" x="' + q.x.toFixed(1) + '" y="' + (q.y + 6) + '" text-anchor="middle">' + (w.checkpoint ? '★' : w.n) + '</text>';
     const lat = q.x > W / 2 ? -1 : 1;
     const tx = q.x + lat * (r + 12);
-    s += '<text class="nod-et" x="' + tx.toFixed(1) + '" y="' + (q.y - 2) + '" text-anchor="' + (lat > 0 ? 'start' : 'end') + '">' + (w.checkpoint ? 'Checkpoint · ' : '') + 'Săpt. ' + w.n + '</text>';
-    s += '<text class="nod-sub" x="' + tx.toFixed(1) + '" y="' + (q.y + 15) + '" text-anchor="' + (lat > 0 ? 'start' : 'end') + '">' + (w.lectii ? w.lectii + (w.lectii === 1 ? ' lecție' : ' lecții') + (w.minute ? ' · ' + w.minute + ' min' : '') : (w.stare === 'curenta' ? 'acum' : w.stare === 'viitoare' ? new Date(w.de_la).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' }) : '')) + '</text>';
+    s += '<text class="nod-et" x="' + tx.toFixed(1) + '" y="' + (q.y - 2) + '" text-anchor="' + (lat > 0 ? 'start' : 'end') + '">' + (w.n === 0 ? 'Testul de nivel' : (w.checkpoint ? 'Checkpoint · ' : '') + 'Unitatea ' + w.n) + '</text>';
+    const sub = w.n === 0 ? (w.stare === 'trecuta' ? 'făcut' + (w.nivel ? ' · ' + w.nivel : '') : 'primul pas') :
+      w.progres && w.progres.gata ? 'terminată' : w.progres && w.progres.procent ? w.progres.procent + '% · ' + w.progres.vorbit_min + ' min vorbit' :
+      w.stare === 'curenta' ? 'acum' : 'plan: ' + new Date(w.de_la).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' });
+    s += '<text class="nod-sub" x="' + tx.toFixed(1) + '" y="' + (q.y + 15) + '" text-anchor="' + (lat > 0 ? 'start' : 'end') + '">' + esc(sub) + '</text>';
     s += '</g>';
   });
   s += '</svg>';
@@ -531,8 +592,8 @@ function foaieSaptamana(n) {
   }
   const ex = w.examen;
   strat('<span class="eticheta">' + esc(w.faza_nume || '') + ' · ' + new Date(w.de_la).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' }) + ' – ' + new Date(w.pana_la).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' }) + '</span>' +
-    '<h2>' + (w.checkpoint ? 'Checkpoint · ' : '') + 'Săptămâna ' + w.n + '</h2><p class="tema-foaie">' + esc(w.tema || '') + '</p>' +
-    '<div class="cifre-mici"><span><b>' + w.lectii + '</b> lecții</span><span><b>' + w.minute + '</b> minute</span><span><b>' + w.teste + '</b> teste</span></div>' +
+    '<h2>' + (w.checkpoint ? 'Checkpoint · ' : '') + 'Unitatea ' + w.n + '</h2><p class="tema-foaie">' + esc(w.tema || '') + '</p>' +
+    (w.progres ? '<div class="cifre-mici"><span><b>' + w.progres.procent + '%</b> gata</span><span><b>' + w.progres.vorbit_min + '</b> min vorbit</span><span><b>' + (w.progres.test || 0) + '%</b> test</span><span><b>' + w.progres.scris + '</b> mesaje</span></div>' : '') +
     (ex ? '<div class="raport-mini"><span class="cefr">' + esc(ex.cefr) + '</span><span>fluență ' + ex.fluenta + ' · gramatică ' + ex.gramatica + ' · vocabular ' + ex.vocabular + ' · pronunție ' + ex.pronuntie + '</span></div>' : '') +
     '<div class="butoane-col"><button class="buton principal" id="f-lectie">' + ICON.mic + ' Lecție vorbită pe tema asta</button>' +
     '<button class="buton" id="f-scris">' + ICON.creion + ' Scrie pe tema asta</button>' +
@@ -857,7 +918,7 @@ async function terminaScris() {
   const transcript = [];
   C.mesaje.forEach((m) => { transcript.push({ de: m.de === 'eu' ? 'eu' : 'profesor', text: m.text, ts: m.ts }); });
   try {
-    const r = await api('/api/engleza/lectie', { method: 'POST', body: { mod: 'text', transcript, durata_s: Math.round((Date.now() - C.start) / 1000), saptamana: C.saptamana } });
+    const r = await api('/api/engleza/lectie', { method: 'POST', body: { mod: 'text', transcript, durata_s: Math.round((Date.now() - C.start) / 1000), saptamana: C.saptamana, unitate: C.saptamana !== null ? C.saptamana : (S.stare && S.stare.saptamana) || undefined } });
     sessionStorage.removeItem(CHEIE_SCRIS); C = null;
     toast('Salvat. Rezumatul vine în câteva secunde.');
     location.hash = '#/lectie/' + r.id;
@@ -923,8 +984,9 @@ function legaGrafice() {
     cutie.addEventListener('pointerleave', () => { tip.hidden = true; $$('.activ', cutie).forEach((x) => x.classList.remove('activ')); });
   });
 }
-function hartaZile(zileActive) {
+function hartaZile(zileActive, zileDeschise) {
   const set = new Set(zileActive || []);
+  const deschise = new Set(zileDeschise || []);
   const azi = new Date(); azi.setHours(12, 0, 0, 0);
   const sapt = 17;
   const start = new Date(azi); start.setDate(start.getDate() - ((azi.getDay() + 6) % 7) - (sapt - 1) * 7);
@@ -935,11 +997,11 @@ function hartaZile(zileActive) {
       const z = new Date(start); z.setDate(start.getDate() + w * 7 + d);
       const iso = z.toLocaleDateString('sv-SE');
       const viitor = z > azi;
-      s += '<span class="' + (viitor ? 'viitor' : set.has(iso) ? 'activ' : '') + '" title="' + z.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' }) + (set.has(iso) ? ': ai exersat' : '') + '"></span>';
+      s += '<span class="' + (viitor ? 'viitor' : set.has(iso) ? 'activ' : deschise.has(iso) ? 'deschis' : '') + '" title="' + z.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' }) + (set.has(iso) ? ': ai exersat' : deschise.has(iso) ? ': doar ai intrat' : ': n-ai folosit-o') + '"></span>';
     }
     s += '</div>';
   }
-  return s + '</div><div class="legenda-zile"><span class="mic">fără exercițiu</span><span class="cel"></span><span class="cel activ"></span><span class="mic">ai exersat</span></div>';
+  return s + '</div><div class="legenda-zile"><span class="cel activ"></span><span class="mic">ai exersat</span><span class="cel deschis"></span><span class="mic">doar ai intrat</span><span class="cel"></span><span class="mic">n-ai folosit-o</span></div>';
 }
 async function vedereProgres(id) {
   titlu('Progres');
@@ -964,7 +1026,7 @@ async function vedereProgres(id) {
   h += '<section class="card"><div class="rand"><h3>Scorurile la teste</h3><span class="mic">în procente</span></div>' + (ts.length ? grafic(ts, { tip: 'bare', titlu: 'Scorurile la teste', max: 100, grila: [0, 50, 100] }) : '<p class="text-2">Apare după primul test.</p>') + '</section>';
   const ex = (p.examene || []).slice(-1)[0];
   if (ex) h += '<section class="card"><div class="rand"><h3>Ultimul test vorbit</h3><span class="mic">' + zi(ex.data) + '</span></div>' + raportScoruri(ex) + '</section>';
-  h += '<section class="card"><div class="rand"><h3>Zilele în care ai exersat</h3><span class="mic">ultimele 4 luni</span></div>' + hartaZile(p.zile_active) + '</section>';
+  h += '<section class="card"><div class="rand"><h3>Zilele în care ai exersat</h3><span class="mic">ultimele 4 luni</span></div>' + hartaZile(p.zile_active, p.zile_deschise) + '</section>';
   h += '<h2 class="titlu">Insigne</h2><div class="insigne">' + (p.insigne || []).map((b) => '<div class="insigna-p' + (b.castigata ? ' castigata' : '') + '" title="' + esc(b.descriere) + '"><span class="insigna-icon">' + (b.castigata ? ICON.trofeu : ICON.bifa) + '</span><b>' + esc(b.nume) + '</b><small>' + esc(b.descriere) + '</small></div>').join('') + '</div>';
   $('#main').innerHTML = h;
   legaGrafice();
@@ -1258,6 +1320,7 @@ async function terminaLectia(fortat) {
   document.body.classList.remove('in-lectie');
   const sesiune = { transcript: L.transcript, durata_s: durataS, cost_usd: Math.round(L.cost * 10000) / 10000, mod: L.mod, drum: S.drum, raport_test: L.raport };
   if (L.saptamana !== null) sesiune.saptamana = L.saptamana;
+  sesiune.unitate = L.saptamana !== null ? L.saptamana : (S.stare && S.stare.saptamana) || undefined;
   L.faza = 'oprit';
   const minuteNoi = Math.round(durataS / 60);
   $('#main').innerHTML = '<div class="final-test">' + (L.raport && L.raport.cefr ? raportScoruri(L.raport) : inel(Math.min(1, minuteNoi / Math.max(5, setari.obiectiv)), durata(durataS), 'minute')) +
@@ -1328,7 +1391,8 @@ async function vedereFraze(id, arg) {
   h += '<div class="fraze">' + F.lista.map((f, i) => '<div class="fraza" data-i="' + i + '"><div class="fraza-text"><b>' + esc(f.en) + '</b><span>' + esc(f.ro) + '</span>' + (f.cand ? '<small>' + esc(f.cand) + '</small>' : '') + '</div>' +
     '<div class="fraza-butoane"><button class="buton-rotund mic" data-reda="' + i + '" aria-label="Ascultă">' + ICON.difuzor + '</button><button class="buton-rotund mic" data-card="' + i + '" aria-label="Adaugă la cartonașe">' + ICON.plus + '</button></div></div>').join('') + '</div>';
   $('#main').innerHTML = h;
-  $$('[data-reda]').forEach((b) => { b.onclick = () => reda(F.lista[Number(b.dataset.reda)].en, b); });
+  F.unitate = n;
+  $$('[data-reda]').forEach((b) => { b.onclick = () => { reda(F.lista[Number(b.dataset.reda)].en, b); noteaza('fraza', n); }; });
   $$('[data-card]').forEach((b) => {
     b.onclick = async () => {
       const f = F.lista[Number(b.dataset.card)];
@@ -1354,6 +1418,7 @@ async function vedereFraze(id, arg) {
       try { await redaSiAsteapta(F.lista[i].en); } catch (e) { toast(e.message || 'Nu pot reda.', true); break; }
       await new Promise((r) => setTimeout(r, 3500));
     }
+    if (F.redaTot) noteaza('fraze', n);
     F.redaTot = false;
     $$('.fraza').forEach((x) => x.classList.remove('acum'));
     if (window.Aplicatie && window.Aplicatie.ecranAprins) window.Aplicatie.ecranAprins(false);
@@ -1404,6 +1469,17 @@ window.addEventListener('pagehide', () => { if (L.faza === 'live') salveazaLocal
 window.addEventListener('hashchange', randeaza);
 window.addEventListener('resize', () => { if (ruta().v === 'parcurs' && S.parcurs) deseneazaHarta(S.parcurs); });
 
+function noteaza(tip, unitate) {
+  const corp = { tip };
+  if (Number.isInteger(unitate)) corp.unitate = unitate;
+  api('/api/engleza/activitate', { method: 'POST', body: corp }).catch(() => {});
+}
+function noteazaDeschiderea() {
+  const azi = new Date().toLocaleDateString('sv-SE');
+  try { if (localStorage.getItem('engleza.deschis') === azi) return; localStorage.setItem('engleza.deschis', azi); } catch (e) { /* ignor */ }
+  noteaza('deschidere');
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && cfg) noteazaDeschiderea(); });
 function legaturaPentruAplicatie() {
   try { if (cfg && window.Aplicatie && window.Aplicatie.legatura) window.Aplicatie.legatura(cfg.api, cfg.cheie); } catch (e) { /* nu e APK */ }
 }
@@ -1413,6 +1489,7 @@ async function porneste() {
   if (p) await imperecheaza(p);
   if (!cfg) return ecranNelegat();
   legaturaPentruAplicatie();
+  noteazaDeschiderea();
   if (!location.hash || location.hash === '#') history.replaceState(null, '', '#/acasa');
   randeaza();
   if (ruta().v !== 'acasa') incarcaStare().catch(() => {});
