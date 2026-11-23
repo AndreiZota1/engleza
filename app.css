@@ -462,3 +462,46 @@ body.in-lectie .toast { bottom: calc(20px + env(safe-area-inset-bottom)); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
 .lipire { width: 100%; min-height: 110px; margin: 14px 0 10px; padding: 12px; border-radius: 14px; border: 1px solid var(--linie-2); background: var(--card); }
+
+/* ---------- v3 (23.11): începutul, planul zilei, ținta, simulări, fraze ---------- */
+.inceput { border-color: var(--lime); background: linear-gradient(160deg, var(--lime-fond), var(--card)); }
+.inceput h2 { margin: 2px 0 6px; }
+.pas { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 10px; padding: 12px; border-radius: 14px; border: 1px solid var(--linie-2); background: var(--card); color: var(--text); text-decoration: none; text-align: left; }
+.pas b { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--lime); color: #0D1C2B; font: 600 16px 'Rubik', sans-serif; }
+.pas span { display: grid; font-size: 13px; color: var(--text-3); }
+.pas strong { color: var(--text); font: 600 15px 'Rubik', sans-serif; }
+.plan h3 { font-size: 16px; }
+.plan-lista { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.plan-lista li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--card-2); cursor: pointer; }
+.plan-lista li.facut { opacity: 0.75; }
+.plan-bifa { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--linie-2); display: grid; place-items: center; }
+.plan-lista li.facut .plan-bifa { background: var(--lime); border-color: var(--lime); color: #0D1C2B; }
+.plan-bifa svg { width: 16px; height: 16px; }
+.plan-text { display: grid; }
+.plan-text b { font: 500 15px 'Rubik', sans-serif; }
+.plan-lista li.facut .plan-text b { text-decoration: line-through; text-decoration-color: var(--text-3); }
+.plan-text small { color: var(--text-3); font-size: 12.5px; }
+.tinta { cursor: pointer; }
+.tinta h2 { font-size: 26px; color: var(--lime-2); }
+.tinta h2 small { font: 400 13px 'Lexend', sans-serif; color: var(--text-3); }
+.tinta-data { text-align: right; display: grid; }
+.tinta-data b { font: 600 17px 'Rubik', sans-serif; text-transform: capitalize; }
+.tinta-data span { font-size: 12px; color: var(--text-3); }
+.cefr-cerc.mare { width: 120px; height: 120px; font-size: 40px; }
+.benzi { width: 100%; display: grid; gap: 8px; margin: 10px 0; }
+.banda { display: grid; grid-template-columns: 34px 1fr 40px; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); text-align: left; }
+.banda b { text-align: right; color: var(--text); font-family: 'Rubik', sans-serif; }
+.scenarii { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 12px; }
+.scenariu { display: grid; gap: 4px; align-content: start; text-align: left; padding: 14px; min-height: 150px; border-radius: var(--raza); border: 1px solid var(--linie); background: var(--card); box-shadow: var(--umbra); }
+.scenariu b { font: 600 15px/1.25 'Rubik', sans-serif; }
+.scenariu > span:last-child { font-size: 12.5px; color: var(--text-3); line-height: 1.35; }
+.scenariu:active { transform: scale(0.98); }
+.fraze { display: grid; gap: 8px; margin-top: 12px; }
+.fraza { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--linie); transition: border-color 0.2s, background 0.2s; }
+.fraza.acum { border-color: var(--lime); background: var(--lime-fond); }
+.fraza-text { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.fraza-text b { font: 500 15.5px/1.35 'Rubik', sans-serif; }
+.fraza-text span { color: var(--text-2); font-size: 14px; }
+.fraza-text small { color: var(--text-3); font-size: 12px; }
+.fraza-butoane { display: flex; gap: 6px; flex: none; }
+.banda-checkpoint.albastru { border-color: rgba(90, 140, 212, 0.45); background: var(--albastru-fond); color: var(--albastru); text-decoration: none; }

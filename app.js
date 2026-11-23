@@ -154,7 +154,70 @@ const ICON = {
   harta: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
   trofeu: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   bifa: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  telefon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+  grafic: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M6 16v-4M11 16V8M16 16v-6M20 6l-5 3-4-3-6 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  bani: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
+  alerta: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 20h20zM12 10v4M12 17v.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  microfon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  oameni: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="9" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 20a6 6 0 0 1 12 0M14 20a4.5 4.5 0 0 1 8 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  om: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 21a8 8 0 0 1 16 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  avion: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 13l8-2 5-8 2 1-2 8 6 2-1 2-6-1-3 6-2-1 1-5-8 1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>',
 };
+const ORE_CEFR = { A1: 90, 'A1+': 140, A2: 190, 'A2+': 280, B1: 375, 'B1+': 460, B2: 550, 'B2+': 650, C1: 750, 'C1+': 870, C2: 1000 };
+const ORDINE_CEFR = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+function nivelUrmator(n) { const i = ORDINE_CEFR.indexOf(String(n || '').replace('+', '')); return i >= 0 && i < ORDINE_CEFR.length - 1 ? ORDINE_CEFR[i + 1] : 'B1'; }
+function tintaCurenta(s) { const t = setari.tinta; const n = String((s && s.nivel) || '').replace(/\s/g, '').toUpperCase(); if (t && (!ORE_CEFR[n] || ORE_CEFR[t] > ORE_CEFR[n])) return t; return nivelUrmator(n || 'A2'); }
+function estimare(s) {
+  const niv = String((s && s.nivel) || '').replace(/\s/g, '').toUpperCase();
+  const tinta = tintaCurenta(s);
+  if (!ORE_CEFR[niv] || !ORE_CEFR[tinta]) return null;
+  const ore = ORE_CEFR[tinta] - ORE_CEFR[niv];
+  const real = ((s.minute_14z || 0) / 2) / 60;
+  const plan = ((setari.obiectiv || 30) * 6) / 60;
+  const ritm = real >= 1 ? real : plan;
+  const sapt = ore / ritm;
+  return { niv, tinta, ore, ritm, sapt, data: new Date(Date.now() + sapt * 7 * 864e5), dinPlan: real < 1 };
+}
+function cardTinta(s) {
+  const e = estimare(s);
+  if (!e) return '';
+  const luna = e.data.toLocaleDateString('ro-RO', { month: 'long', year: 'numeric' });
+  return '<section class="card tinta" id="card-tinta"><div class="rand"><div><span class="eticheta">Ținta ta</span><h2>' + esc(e.tinta) + ' <small>de la ' + esc(e.niv) + '</small></h2></div>' +
+    '<div class="tinta-data"><b>' + esc(luna) + '</b><span>estimat</span></div></div>' +
+    '<p class="mic">≈ ' + Math.round(e.ore) + ' de ore de exercițiu, la ' + (Math.round(e.ritm * 10) / 10).toString().replace('.', ',') + ' ore pe săptămână' + (e.dinPlan ? ' (obiectivul tău zilnic, 6 zile)' : ' (ritmul tău din ultimele două săptămâni)') + '. Estimare orientativă, după orele de studiu ale Cambridge; o poți schimba din Setări.</p></section>';
+}
+function planulZilei(s) {
+  const a = s.azi || {};
+  const ob = setari.obiectiv || 30;
+  const it = [
+    { ok: (a.minute || 0) >= ob, t: 'Vorbește ' + ob + ' de minute', d: (a.minute || 0) + ' din ' + ob + ' azi', act: 'start' },
+    { ok: (a.de_repetat || 0) === 0 || (a.carduri || 0) >= 10, t: 'Repetă cartonașele', d: a.de_repetat ? a.de_repetat + ' de repetat' : (a.carduri ? a.carduri + ' repetate azi' : 'nimic de repetat'), href: '#/carduri' },
+    { ok: (a.teste || 0) >= 1, t: 'Un test scurt', d: a.teste ? (a.teste === 1 ? 'un test azi' : a.teste + ' teste azi') : 'trei minute', href: '#/test/rapid' },
+  ];
+  const gata = it.filter((x) => x.ok).length;
+  return '<section class="card plan"><div class="rand"><h3>Planul de azi</h3><span class="mic">' + gata + ' din ' + it.length + '</span></div><ul class="plan-lista">' +
+    it.map((x, i) => '<li class="' + (x.ok ? 'facut' : '') + '" data-plan="' + i + '"><span class="plan-bifa">' + (x.ok ? ICON.bifa : '') + '</span><span class="plan-text"><b>' + esc(x.t) + '</b><small>' + esc(x.d) + '</small></span></li>').join('') +
+    '</ul></section>';
+}
+function legaPlanul(s) {
+  const ob = setari.obiectiv || 30; void ob;
+  $$('[data-plan]').forEach((li) => {
+    li.onclick = () => {
+      const i = Number(li.dataset.plan);
+      if (i === 0) pornesteLectia({ mod: setari.mod === 'test' ? 'lectie' : setari.mod });
+      else if (i === 1) location.hash = '#/carduri';
+      else location.hash = '#/test/rapid';
+    };
+  });
+}
+function cardNivelDeInceput() {
+  return '<section class="card inceput"><span class="eticheta">Primul pas</span><h2>Află-ți nivelul</h2>' +
+    '<p class="text-2">Programul tău de 20 de săptămâni a pornit azi. Ca să-l potrivesc pe tine, începe cu testul de nivel: întâi cel scris, apoi cel vorbit.</p>' +
+    '<a class="pas" href="#/test/nivel"><b>1</b><span><strong>Test scris</strong>20 de întrebări, de la A1 la C1 · cam 8 minute</span></a>' +
+    '<button class="pas" id="pas-vorbit"><b>2</b><span><strong>Test vorbit</strong>10 minute cu examinatorul · fluență, gramatică, vocabular, pronunție</span></button></section>';
+}
 
 /* ------------------------------------------------------------ înregistrare (pentru „Spune în engleză” și dictare) */
 const Mic = {
@@ -282,7 +345,7 @@ function ruta() {
   return { v: p[0] || 'acasa', arg: decodeURIComponent(p.slice(1).join('/') || '') };
 }
 function marcheazaTab(v) {
-  const tab = ({ saptamana: 'parcurs', test: 'exerseaza', carduri: 'exerseaza', scris: 'exerseaza', lectie: 'istoric', live: '' })[v];
+  const tab = ({ saptamana: 'parcurs', test: 'exerseaza', carduri: 'exerseaza', scris: 'exerseaza', simulari: 'exerseaza', fraze: 'exerseaza', lectie: 'istoric', live: '' })[v];
   const t = tab === undefined ? v : tab;
   $$('#tabbar a').forEach((a) => a.classList.toggle('activ', a.dataset.tab === t));
 }
@@ -304,6 +367,8 @@ async function randeaza() {
     else if (v === 'carduri') await vedereCarduri(id);
     else if (v === 'scris') await vedereScris(id);
     else if (v === 'progres') await vedereProgres(id);
+    else if (v === 'simulari') await vedereSimulari(id);
+    else if (v === 'fraze') await vedereFraze(id, arg);
     else if (v === 'istoric') await vedereIstoric(id);
     else if (v === 'lectie') await vedereLectie(id, arg);
     else if (v === 'live') { if (L.faza === 'oprit') location.hash = '#/acasa'; }
@@ -340,6 +405,8 @@ async function vedereAcasa(id) {
     '<span class="mic-erou">' + (s.saptamana >= 1 && s.saptamana <= 20 ? 'săptămâna ' + s.saptamana + ' din 20' : '') + '</span></div></div>' +
     (s.checkpoint ? '<button class="banda-checkpoint" id="checkpoint">' + ICON.trofeu + '<span>Săptămână de checkpoint: fă testul vorbit</span></button>' : '') +
     '</section>';
+  if (!s.are_nivel) h += cardNivelDeInceput();
+  h += planulZilei(s);
 
   h += '<section class="panou-start"><div class="moduri">' +
     [['lectie', 'Lecție', 'tema săptămânii, cu corecturi', ICON.carte], ['liber', 'Conversație', 'liber, despre ce vrei', ICON.chat], ['test', 'Test vorbit', 'examen de 10 min, cu scor', ICON.trofeu]]
@@ -350,10 +417,12 @@ async function vedereAcasa(id) {
     '<p class="mic centru">Profesorul începe el. Îl poți opri oricând cu „stop”, „slower” sau „recap”.</p></section>';
 
   h += '<div class="grila-actiuni">' +
+    tile('#/simulari', ICON.telefon, 'Simulări de lucru', 'apel cu clientul, raport, negociere') +
+    tile('#/fraze', ICON.difuzor, 'Frazele săptămânii', 'le asculți și în mașină') +
     tile('#/scris', ICON.creion, 'Scrie cu profesorul', 'conversație în scris, cu corecturi') +
     tile('#/carduri', ICON.carduri, 'Cartonașe', s.de_repetat ? s.de_repetat + ' de repetat azi' : (s.cuvinte_nr ? s.cuvinte_nr + ' cuvinte' : 'apar după lecții'), s.de_repetat) +
-    tile('#/test/rapid', ICON.fulger, 'Test rapid', '10 întrebări, 3 minute') +
-    tile('#/parcurs', ICON.harta, 'Parcursul tău', 'cele 20 de săptămâni') + '</div>';
+    '</div>';
+  h += cardTinta(s);
   if (ultima) h += cardLectie(ultima, true);
   $('#main').innerHTML = h;
   $$('[data-w]').forEach((el) => { el.style.width = el.dataset.w + '%'; });
@@ -361,6 +430,9 @@ async function vedereAcasa(id) {
   $$('[data-drum]').forEach((b) => { b.onclick = () => { S.drum = b.dataset.drum; vedereAcasa(++S.randare); }; });
   $('#start').onclick = () => pornesteLectia({ mod: setari.mod });
   const cp = $('#checkpoint'); if (cp) cp.onclick = () => pornesteLectia({ mod: 'test' });
+  const pv = $('#pas-vorbit'); if (pv) pv.onclick = () => pornesteLectia({ mod: 'test' });
+  const ct = $('#card-tinta'); if (ct) ct.onclick = foaieSetari;
+  legaPlanul(s);
   const ul = $('[data-lectie]'); if (ul) ul.onclick = () => { location.hash = '#/lectie/' + ul.dataset.lectie; };
 }
 function tile(href, icon, t, d, nr) {
@@ -447,6 +519,16 @@ function deseneazaHarta(p) {
 function foaieSaptamana(n) {
   const w = S.parcurs && S.parcurs.saptamani.find((x) => x.n === n);
   if (!w) return;
+  if (n === 0) {
+    strat('<span class="eticheta">Primul pas</span><h2>Testul de nivel</h2>' +
+      (S.parcurs.are_nivel ? '<p class="text-2">Făcut. Nivelul tău: <b>' + esc(w.nivel || '?') + '</b>. Îl poți reface oricând, ca să vezi cât ai crescut.</p>' : '<p class="text-2">Încă nu l-ai făcut. Durează în total cam 20 de minute și potrivește tot programul pe nivelul tău.</p>') +
+      '<div class="butoane-col"><a class="buton principal" href="#/test/nivel">' + ICON.grafic + ' Test scris (20 de întrebări)</a><button class="buton" id="f-examen0">' + ICON.mic + ' Test vorbit (10 minute)</button></div>',
+    () => {
+      $('#f-examen0').onclick = () => { inchideStrat(); pornesteLectia({ mod: 'test' }); };
+      $$('.foaie-jos a').forEach((a) => { a.addEventListener('click', inchideStrat); });
+    });
+    return;
+  }
   const ex = w.examen;
   strat('<span class="eticheta">' + esc(w.faza_nume || '') + ' · ' + new Date(w.de_la).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' }) + ' – ' + new Date(w.pana_la).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' }) + '</span>' +
     '<h2>' + (w.checkpoint ? 'Checkpoint · ' : '') + 'Săptămâna ' + w.n + '</h2><p class="tema-foaie">' + esc(w.tema || '') + '</p>' +
@@ -476,6 +558,8 @@ async function vedereExerseaza(id) {
   if (id !== S.randare) return;
   const s = S.stare || {};
   let h = '<div class="grila-actiuni mare">' +
+    tile('#/simulari', ICON.telefon, 'Simulări de lucru', 'apel, raport, negociere, pronunție') +
+    tile('#/fraze', ICON.difuzor, 'Frazele săptămânii', 'asculți și repeți, și în mașină') +
     tile('#/carduri', ICON.carduri, 'Cartonașe', s.de_repetat ? s.de_repetat + ' de repetat azi' : 'cuvintele și greșelile tale', s.de_repetat) +
     tile('#/scris', ICON.creion, 'Scrie cu profesorul', 'conversație în scris, cu corecturi') +
     tile('#/test/rapid', ICON.fulger, 'Test rapid', 'un pic din toate') +
@@ -486,6 +570,7 @@ async function vedereExerseaza(id) {
     tile('#/test/tema', ICON.harta, 'Tema săptămânii', s.tema ? s.tema.split(':')[0] : '') +
     '</div>';
   h += '<button class="banda-checkpoint lat" id="examen">' + ICON.trofeu + '<span>Test vorbit de 10 minute, cu nivel și scor</span></button>';
+  h += '<a class="banda-checkpoint lat albastru" href="#/test/nivel">' + ICON.grafic + '<span>Testul de nivel scris (20 de întrebări, A1–C1)</span></a>';
   const ist = (progres && progres.teste_istoric) || [];
   if (ist.length) h += '<h2 class="titlu">Testele tale</h2><section class="card"><ul class="lista-teste">' + ist.slice(-8).reverse().map((t) => '<li><span>' + esc(t.titlu || t.tip) + '<small>' + zi(t.data) + '</small></span><b class="' + (t.scor >= 80 ? 'bine' : t.scor < 50 ? 'rau' : '') + '">' + t.scor + '%</b></li>').join('') + '</ul></section>';
   $('#main').innerHTML = h;
@@ -497,7 +582,7 @@ const T = { test: null, i: 0, rasp: [], ordine: [], start: 0, raspuns: false };
 const MESAJE_INCARCARE = ['Îți aleg greșelile de verificat…', 'Scriu mesajele „clienților”…', 'Amestec variantele…', 'Încă puțin…'];
 async function vedereTest(id, arg) {
   titlu('Test');
-  const m = String(arg || 'rapid').split('?')[0].match(/^(rapid|greseli|cuvinte|ascultare|tema|vorbit)(?:-(\d{1,2}))?$/);
+  const m = String(arg || 'rapid').split('?')[0].match(/^(rapid|greseli|cuvinte|ascultare|tema|vorbit|nivel)(?:-(\d{1,2}))?$/);
   const tip = m ? m[1] : 'rapid';
   const sapt = m && m[2] ? Number(m[2]) : null;
   let k = 0;
@@ -608,8 +693,29 @@ async function verificaSpune(q, text) {
     toast(e.message, true);
   }
 }
+async function finalTestNivel() {
+  const t = T.test;
+  titlu('Nivelul tău');
+  $('#main').innerHTML = '<div class="gol-mare"><div class="incarca-test"><span></span><span></span><span></span></div><h2>Calculez nivelul…</h2></div>';
+  let r;
+  try {
+    r = await api('/api/engleza/test/rezultat', { method: 'POST', body: { id: t.id, raspunsuri: T.rasp, durata_s: Math.round((Date.now() - T.start) / 1000) } });
+  } catch (e) { toast(e.message, true); location.hash = '#/acasa'; return; }
+  const benzi = r.benzi || {};
+  confetti();
+  $('#main').innerHTML = '<div class="final-test"><div class="cefr-cerc mare">' + esc(r.nivel || '?') + '</div><h2>Nivelul tău la scris: ' + esc(r.nivel || '?') + '</h2>' +
+    '<p class="text-2">' + r.corecte + ' din ' + r.total + ' răspunsuri corecte. Pe fiecare nivel:</p><div class="benzi">' +
+    ['A1', 'A2', 'B1', 'B2', 'C1'].map((b) => { const x = benzi[b] || { corecte: 0, total: 0 }; const f = x.total ? x.corecte / x.total : 0;
+      return '<div class="banda"><span>' + b + '</span><div class="scor-bara"><i data-w="' + Math.round(f * 100) + '"></i></div><b>' + x.corecte + '/' + x.total + '</b></div>'; }).join('') + '</div>' +
+    '<p class="text-2">Testul scris măsoară gramatica și vocabularul. Pentru vorbit și pronunție, fă și testul vorbit de 10 minute: el stabilește nivelul final.</p>' +
+    '<div class="butoane-col"><button class="buton principal" id="vorbit">' + ICON.mic + ' Acum testul vorbit</button><a class="buton" href="#/acasa">Mai târziu</a></div></div>';
+  setTimeout(() => $$('.benzi [data-w]').forEach((el) => { el.style.width = el.dataset.w + '%'; }), 50);
+  $('#vorbit').onclick = () => pornesteLectia({ mod: 'test' });
+  incarcaStare().catch(() => {});
+}
 async function finalTest() {
   const t = T.test;
+  if (t.tip === 'nivel') return finalTestNivel();
   const corecte = T.rasp.filter((r) => r && r.corect).length;
   const procent = corecte / t.intrebari.length;
   titlu('Rezultat');
@@ -911,7 +1017,7 @@ const L = {
 function ecranLive() {
   const examen = L.mod === 'test';
   $('#main').innerHTML = '<div class="live' + (examen ? ' examen' : '') + '">' +
-    '<div class="live-sus"><span class="eticheta-live">' + (examen ? 'Test vorbit' : NUME_MOD[L.mod]) + (L.saptamana !== null ? ' · săpt. ' + L.saptamana : '') + '</span><span class="mic"><span id="ceas">0:00</span> · <span id="cost">$0.00</span></span></div>' +
+    '<div class="live-sus"><span class="eticheta-live">' + (examen ? 'Test vorbit' : (L.numeScenariu ? 'Simulare · ' + esc(L.numeScenariu) : NUME_MOD[L.mod])) + (L.saptamana !== null ? ' · săpt. ' + L.saptamana : '') + '</span><span class="mic"><span id="ceas">0:00</span> · <span id="cost">$0.00</span></span></div>' +
     '<div class="orb-live" id="orb"><span class="orb-halou"></span><span class="orb-corp"></span></div>' +
     '<p class="stare" id="stare">Mă conectez…</p><p class="mic centru" id="sub-stare">' + (examen ? 'Fără corecturi în timpul testului. La final primești nivelul și scorurile.' : 'Vorbește liber. Profesorul te așteaptă când faci pauze.') + '</p>' +
     '<div class="comenzi">' +
@@ -1029,6 +1135,7 @@ function leagaSunetProfesor(stream) {
 async function conecteaza(reluare) {
   const corp = { mod: L.mod, drum: S.drum || drumImplicit(), viteza: setari.viteza, rabdare: setari.rabdare, zgomot: setari.zgomot, reluare: reluare || [] };
   if (L.saptamana !== null) corp.saptamana = L.saptamana;
+  if (L.scenariu) corp.scenariu = L.scenariu;
   const s = await api('/api/engleza/sesiune', { method: 'POST', body: corp });
   if (s.preturi) PRET = s.preturi;
   const pc = new RTCPeerConnection();
@@ -1100,7 +1207,8 @@ async function pornesteLectia(opt) {
   if (L.faza !== 'oprit') return;
   if (!window.RTCPeerConnection || !navigator.mediaDevices) { toast('Browserul ăsta nu poate face convorbiri.', true); return; }
   Object.assign(L, { faza: 'conectare', transcript: [], cost: 0, mut: false, oprireCeruta: false, reconectari: 0, raport: null, apeluri: new Set(),
-    mod: (opt && opt.mod) || 'lectie', saptamana: opt && Number.isInteger(opt.saptamana) ? opt.saptamana : null });
+    mod: (opt && opt.mod) || 'lectie', saptamana: opt && Number.isInteger(opt.saptamana) ? opt.saptamana : null,
+    scenariu: (opt && opt.scenariu) || null, numeScenariu: (opt && opt.numeScenariu) || null });
   location.hash = '#/live';
   document.body.classList.add('in-lectie');
   ecranLive();
@@ -1179,6 +1287,81 @@ async function trimiteSesiuneaRamasa() {
   try { await api('/api/engleza/lectie', { method: 'POST', body: l }); localStorage.removeItem(CHEIE_LECTIE); toast('Am salvat lecția întreruptă de data trecută.'); } catch (e) { /* data viitoare */ }
 }
 
+/* ------------------------------------------------------------ SIMULĂRI DE LUCRU */
+async function vedereSimulari(id) {
+  titlu('Simulări de lucru');
+  const s = S.stare || await incarcaStare();
+  if (id !== S.randare) return;
+  const lista = s.scenarii || [];
+  let h = '<p class="text-2">Joci o situație reală, în engleză, cu profesorul în rolul clientului sau al colegului. Rămâne în rol, îți corectează din mers o singură greșeală pe replică, iar la final face recapitularea.</p>';
+  h += '<div class="scenarii">' + lista.map((x) => '<button class="scenariu" data-sc="' + esc(x.id) + '"><span class="tile-icon">' + (ICON[x.icon] || ICON.chat) + '</span><b>' + esc(x.nume) + '</b><span>' + esc(x.descriere) + '</span></button>').join('') + '</div>';
+  $('#main').innerHTML = h;
+  $$('[data-sc]').forEach((b) => {
+    b.onclick = () => { const x = lista.find((q) => q.id === b.dataset.sc); pornesteLectia({ mod: 'lectie', scenariu: b.dataset.sc, numeScenariu: x ? x.nume : '' }); };
+  });
+}
+
+/* ------------------------------------------------------------ FRAZELE SĂPTĂMÂNII (și pentru mașină) */
+const F = { lista: [], redaTot: false };
+function asteaptaSfarsit(a) { return new Promise((r) => { a.onended = r; a.onerror = r; }); }
+async function redaSiAsteapta(text) {
+  let url = Redare.cache.get(text);
+  if (!url) { url = URL.createObjectURL(await apiAudioEngleza(text)); Redare.cache.set(text, url); }
+  const a = new Audio(url);
+  Redare.audio = a;
+  const gata = asteaptaSfarsit(a);
+  await a.play();
+  await gata;
+}
+function textRedaTot() { return ICON.play + ' Redă toate, cu pauză între ele'; }
+async function vedereFraze(id, arg) {
+  const s = S.stare || await incarcaStare();
+  const n = /^\d{1,2}$/.test(String(arg || '')) ? Number(arg) : (s.saptamana || 1);
+  titlu('Frazele săptămânii');
+  $('#main').innerHTML = '<div class="gol-mare"><div class="incarca-test"><span></span><span></span><span></span></div><h2>Pregătesc frazele…</h2><p class="text-2">Prima dată durează câteva secunde.</p></div>';
+  const d = await api('/api/engleza/fraze?saptamana=' + n);
+  if (id !== S.randare) return;
+  F.lista = d.fraze || [];
+  F.redaTot = false;
+  let h = '<section class="card"><span class="eticheta">Săptămâna ' + n + '</span><p class="tema-foaie">' + esc(d.tema || '') + '</p>' +
+    '<button class="buton principal lat" id="reda-tot">' + textRedaTot() + '</button><p class="mic centru">Bun în mașină: asculți fraza, apoi o repeți cu voce tare în pauză.</p></section>';
+  h += '<div class="fraze">' + F.lista.map((f, i) => '<div class="fraza" data-i="' + i + '"><div class="fraza-text"><b>' + esc(f.en) + '</b><span>' + esc(f.ro) + '</span>' + (f.cand ? '<small>' + esc(f.cand) + '</small>' : '') + '</div>' +
+    '<div class="fraza-butoane"><button class="buton-rotund mic" data-reda="' + i + '" aria-label="Ascultă">' + ICON.difuzor + '</button><button class="buton-rotund mic" data-card="' + i + '" aria-label="Adaugă la cartonașe">' + ICON.plus + '</button></div></div>').join('') + '</div>';
+  $('#main').innerHTML = h;
+  $$('[data-reda]').forEach((b) => { b.onclick = () => reda(F.lista[Number(b.dataset.reda)].en, b); });
+  $$('[data-card]').forEach((b) => {
+    b.onclick = async () => {
+      const f = F.lista[Number(b.dataset.card)];
+      try {
+        await api('/api/engleza/carduri/adauga', { method: 'POST', body: { en: f.en, ro: f.ro } });
+        b.classList.add('canta');
+        b.innerHTML = ICON.bifa;
+        toast('Adăugată la cartonașe.');
+        incarcaStare().catch(() => {});
+      } catch (e) { toast(e.message, true); }
+    };
+  });
+  $('#reda-tot').onclick = async () => {
+    const bt = $('#reda-tot');
+    if (F.redaTot) { F.redaTot = false; opresteRedarea(); bt.innerHTML = textRedaTot(); return; }
+    F.redaTot = true;
+    bt.textContent = 'Oprește redarea';
+    if (window.Aplicatie && window.Aplicatie.ecranAprins) window.Aplicatie.ecranAprins(true);
+    for (let i = 0; i < F.lista.length && F.redaTot && ruta().v === 'fraze'; i++) {
+      $$('.fraza').forEach((x) => x.classList.toggle('acum', Number(x.dataset.i) === i));
+      const el = $('.fraza[data-i="' + i + '"]');
+      if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      try { await redaSiAsteapta(F.lista[i].en); } catch (e) { toast(e.message || 'Nu pot reda.', true); break; }
+      await new Promise((r) => setTimeout(r, 3500));
+    }
+    F.redaTot = false;
+    $$('.fraza').forEach((x) => x.classList.remove('acum'));
+    if (window.Aplicatie && window.Aplicatie.ecranAprins) window.Aplicatie.ecranAprins(false);
+    const b2 = $('#reda-tot');
+    if (b2) b2.innerHTML = textRedaTot();
+  };
+}
+
 /* ------------------------------------------------------------ SETĂRI */
 function foaieSetari() {
   strat('<h2>Setări</h2>' +
@@ -1188,6 +1371,8 @@ function foaieSetari() {
     '<label class="setare"><span>Microfonul</span><select id="zgomot"><option value="far_field"' + (setari.zgomot === 'far_field' ? ' selected' : '') + '>telefonul în suport sau pe masă</option><option value="near_field"' + (setari.zgomot === 'near_field' ? ' selected' : '') + '>căști cu microfon</option></select></label>' +
     '<label class="setare comutator"><input type="checkbox" id="ecran"' + (setari.ecran ? ' checked' : '') + '><span>Ține ecranul aprins în timpul lecției</span></label>' +
     '<label class="setare comutator"><input type="checkbox" id="subtitrari"' + (setari.subtitrari ? ' checked' : '') + '><span>Arată textul conversației în lecție</span></label>' +
+    '<label class="setare"><span>Ținta</span><select id="tinta"><option value="">automat: nivelul următor</option>' + ['B1', 'B2', 'C1'].map((t) => '<option value="' + t + '"' + (setari.tinta === t ? ' selected' : '') + '>' + t + '</option>').join('') + '</select></label>' +
+    '<div class="setare"><span>Programul de 20 de săptămâni</span><small class="mic">' + (S.stare && S.stare.program ? new Date(S.stare.program.inceput).toLocaleDateString('ro-RO', { day: 'numeric', month: 'long' }) + ' – ' + new Date(S.stare.program.sfarsit).toLocaleDateString('ro-RO', { day: 'numeric', month: 'long', year: 'numeric' }) : '') + '</small><button class="buton mic-b" id="reporneste">Repornește programul de azi</button></div>' +
     '<p class="mic">Luna asta: ' + dolari((S.stare && S.stare.cost_luna_usd) || 0) + ' la OpenAI. Modelul: ' + esc((S.stare && S.stare.model) || '') + '.</p>' +
     '<button class="buton principal lat" id="inchide-setari">Gata</button>',
   () => {
@@ -1197,6 +1382,18 @@ function foaieSetari() {
     $('#zgomot').onchange = (e) => { setari.zgomot = e.target.value; salveazaSetari(); };
     $('#ecran').onchange = (e) => { setari.ecran = e.target.checked; salveazaSetari(); };
     $('#subtitrari').onchange = (e) => { setari.subtitrari = e.target.checked; salveazaSetari(); };
+    $('#tinta').onchange = (e) => { setari.tinta = e.target.value || undefined; salveazaSetari(); };
+    $('#reporneste').onclick = async () => {
+      if (!confirm('Repornești programul de 20 de săptămâni de azi? Lecțiile și progresul rămân; se schimbă doar săptămâna curentă.')) return;
+      try {
+        await api('/api/engleza/program', { method: 'POST', body: { inceput: 'azi' } });
+        toast('Programul pornește de azi: săptămâna 1.');
+        S.parcurs = null;
+        await incarcaStare();
+        inchideStrat();
+        randeaza();
+      } catch (e) { toast(e.message, true); }
+    };
     $('#inchide-setari').onclick = () => { inchideStrat(); if (ruta().v === 'acasa') randeaza(); };
   });
 }
@@ -1207,11 +1404,15 @@ window.addEventListener('pagehide', () => { if (L.faza === 'live') salveazaLocal
 window.addEventListener('hashchange', randeaza);
 window.addEventListener('resize', () => { if (ruta().v === 'parcurs' && S.parcurs) deseneazaHarta(S.parcurs); });
 
+function legaturaPentruAplicatie() {
+  try { if (cfg && window.Aplicatie && window.Aplicatie.legatura) window.Aplicatie.legatura(cfg.api, cfg.cheie); } catch (e) { /* nu e APK */ }
+}
 async function porneste() {
   $('#setari').onclick = foaieSetari;
   const p = citestePerechea();
   if (p) await imperecheaza(p);
   if (!cfg) return ecranNelegat();
+  legaturaPentruAplicatie();
   if (!location.hash || location.hash === '#') history.replaceState(null, '', '#/acasa');
   randeaza();
   if (ruta().v !== 'acasa') incarcaStare().catch(() => {});
