@@ -243,7 +243,15 @@ async function imperecheaza(p) {
   }
 }
 function ecranNelegat() {
-  $('#main').innerHTML = '<div class="gol-mare"><div class="gol-icon">' + ICON.chat + '</div><h2>Aplicația nu e legată de Mac</h2><p class="text-2">Deschide pe telefonul ăsta linkul de împerechere primit de la Claude. Dacă ai Panoul Safe Ads în același Chrome, deschide-l o dată pe el: legătura e comună.</p></div>';
+  $('#main').innerHTML = '<div class="gol-mare"><div class="gol-icon">' + ICON.chat + '</div><h2>Aplicația nu e legată de Mac</h2><p class="text-2">Lipește aici linkul de împerechere primit de la Claude (ține apăsat pe link, Copiază, apoi lipește). Linkul merge o singură dată.</p>' +
+    '<textarea id="link-lipit" class="lipire" placeholder="Lipește linkul aici"></textarea><button class="buton principal lat" id="leaga">Leagă de Mac</button></div>';
+  $('#leaga').onclick = async () => {
+    const m = ($('#link-lipit').value || '').match(/p=([A-Za-z0-9_-]{20,})/);
+    if (!m) { toast('Nu găsesc un link de împerechere în textul lipit.', true); return; }
+    history.replaceState(null, '', location.pathname + '#p=' + m[1]);
+    const p = citestePerechea();
+    if (p && await imperecheaza(p)) { history.replaceState(null, '', location.pathname + '#/acasa'); randeaza(); incarcaStare().catch(() => {}); }
+  };
 }
 function ecranNeautorizat() {
   $('#main').innerHTML = '<div class="gol-mare"><h2>Telefonul nu mai e autorizat</h2><p class="text-2">Mac-ul nu mai recunoaște cheia acestui telefon. Cere de la Claude un link nou de împerechere.</p></div>';
@@ -1077,7 +1085,9 @@ function comutaMut() {
   seteazaStare(L.mut ? 'Microfonul e oprit' : 'Rândul tău', L.mut ? 'mut' : 'asteapta');
 }
 async function tineEcranul() {
-  if (!setari.ecran || !('wakeLock' in navigator)) return;
+  if (!setari.ecran) return;
+  if (window.Aplicatie && window.Aplicatie.ecranAprins) { window.Aplicatie.ecranAprins(true); return; }
+  if (!('wakeLock' in navigator)) return;
   try { L.wake = await navigator.wakeLock.request('screen'); } catch (e) { L.wake = null; }
 }
 function salveazaLocal() {
@@ -1127,6 +1137,7 @@ function oprireTehnica() {
   cancelAnimationFrame(L.rafId);
   clearInterval(L.ceas); clearInterval(L.salvare);
   if (L.wake) { L.wake.release().catch(() => {}); L.wake = null; }
+  if (window.Aplicatie && window.Aplicatie.ecranAprins) window.Aplicatie.ecranAprins(false);
   const s = $('#sunet'); if (s) s.srcObject = null;
 }
 async function terminaLectia(fortat) {
@@ -1205,6 +1216,6 @@ async function porneste() {
   randeaza();
   if (ruta().v !== 'acasa') incarcaStare().catch(() => {});
   trimiteSesiuneaRamasa();
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.Aplicatie) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 porneste();

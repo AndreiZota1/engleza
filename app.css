@@ -457,3 +457,5 @@ body.in-lectie .toast { bottom: calc(20px + env(safe-area-inset-bottom)); }
   main { max-width: 760px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+.lipire { width: 100%; min-height: 110px; margin: 14px 0 10px; padding: 12px; border-radius: 14px; border: 1px solid var(--linie-2); background: var(--card); }
