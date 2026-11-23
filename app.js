@@ -222,10 +222,12 @@ function cardUnitate(s) {
   const u = s.unitate;
   if (!u) return '';
   const pr = s.praguri || { vorbit: 45, test: 70, fraze: 10, scris: 10 };
-  const it = [
+  const lu = s.lectii_unitate || [];
+  const testul = { ok: u.test >= pr.test, t: 'Testul pe temă', d: u.test ? 'cel mai bun: ' + u.test + '% (minim ' + pr.test + '%)' : 'minim ' + pr.test + '%', act: 'test' };
+  const frazele = { ok: u.fraze >= pr.fraze, t: 'Frazele unității', d: u.fraze >= pr.fraze ? 'ascultate' : 'ascultă lista o dată, cap-coadă', act: 'fraze' };
+  const it = lu.length ? lu.map((x) => ({ ok: x.facuta, t: 'Lecția ' + x.index + ' · ' + x.titlu, d: progresLectie(x), act: 'lectie:' + x.id })).concat([testul, frazele]) : [
     { ok: u.vorbit_min >= pr.vorbit, t: 'Vorbește pe tema unității', d: u.vorbit_min + ' din ' + pr.vorbit + ' de minute', act: 'vorbit' },
-    { ok: u.test >= pr.test, t: 'Testul pe temă', d: u.test ? 'cel mai bun: ' + u.test + '% (minim ' + pr.test + '%)' : 'minim ' + pr.test + '%', act: 'test' },
-    { ok: u.fraze >= pr.fraze, t: 'Frazele unității', d: u.fraze >= pr.fraze ? 'ascultate' : 'ascultă lista o dată, cap-coadă', act: 'fraze' },
+    testul, frazele,
     { ok: u.scris >= pr.scris, t: 'Scrie cu profesorul', d: u.scris + ' din ' + pr.scris + ' mesaje', act: 'scris' },
   ];
   if (u.checkpoint) it.push({ ok: !!u.examen, t: 'Testul vorbit de checkpoint', d: u.examen ? 'făcut: ' + u.examen.cefr : '10 minute, obligatoriu ca să treci mai departe', act: 'examen' });
@@ -233,13 +235,14 @@ function cardUnitate(s) {
   return '<section class="card unitate-card"><div class="rand"><div><span class="eticheta">Unitatea ' + u.n + ' din 20' + (u.checkpoint ? ' · checkpoint' : '') + '</span><h3>Ca s-o termini</h3></div>' +
     inel(u.procent / 100, u.procent + '%', 'gata') + '</div><ul class="plan-lista">' +
     it.map((x) => '<li class="' + (x.ok ? 'facut' : '') + '" data-unit="' + x.act + '"><span class="plan-bifa">' + (x.ok ? ICON.bifa : '') + '</span><span class="plan-text"><b>' + esc(x.t) + '</b><small>' + esc(x.d) + '</small></span></li>').join('') +
-    '</ul><p class="mic ' + r.clasa + '">Treci la unitatea următoare când ajungi la 85%' + (u.checkpoint ? ' și ai făcut testul vorbit' : '') + '. Acum ești ' + esc(r.text) + '.</p></section>';
+    '</ul><p class="mic ' + r.clasa + '">' + (lu.length ? 'Treci la unitatea următoare după cele 5 lecții și testul pe temă (minim ' + pr.test + '%)' : 'Treci la unitatea următoare când ajungi la 85%') + (u.checkpoint ? ' și testul vorbit' : '') + '. Acum ești ' + esc(r.text) + '.</p></section>';
 }
 function legaUnitatea() {
   $$('[data-unit]').forEach((li) => {
     li.onclick = () => {
       const a = li.dataset.unit;
-      if (a === 'vorbit') pornesteLectia({ mod: 'lectie' });
+      if (a.startsWith('lectie:')) foaieLectie(((S.stare && S.stare.lectii_unitate) || []).find((x) => x.id === a.slice(7)));
+      else if (a === 'vorbit') pornesteLectia({ mod: 'lectie' });
       else if (a === 'test') location.hash = '#/test/tema';
       else if (a === 'fraze') location.hash = '#/fraze';
       else if (a === 'scris') location.hash = '#/scris';
@@ -258,9 +261,132 @@ function zileleTale(s) {
       return '<div class="zi-punct ' + cls + '" title="' + esc(tit) + '"><span></span><small>' + ZILE_SCURT[d.getDay()] + '</small></div>'; }).join('') +
     '</div><div class="legenda-zile"><span class="cel exersat"></span><span class="mic">ai exersat</span><span class="cel deschis"></span><span class="mic">doar ai intrat</span><span class="cel"></span><span class="mic">n-ai folosit-o</span></div></section>';
 }
+/* ------------------------------------------------------------ LECȚIILE: 100, câte 5 pe unitate, construite după testul de nivel */
+function nrLectie(l) { return (l.unitate - 1) * 5 + l.index; }
+function deLectii(n) { n = n || 0; return n === 1 ? 'o lecție' : n + (n % 100 >= 20 || n % 100 === 0 ? ' de lecții' : ' lecții'); }
+function nivelCurs(n) {
+  const v = /([ABC][12]\+?) when speaking/.exec(n || ''), w = /([ABC][12]\+?) in the written/.exec(n || '');
+  if (v && w) return v[1] === w[1] ? v[1] : v[1] + ' vorbit, ' + w[1] + ' scris';
+  return (v && v[1]) || (w && w[1]) || (/[ABC][12]\+?/.exec(n || '') || [''])[0];
+}
+function facute(n) { return (n || 0) + ((n || 0) === 1 ? ' făcută' : ' făcute'); }
+function pragLectie() { const c = (S.stare && S.stare.curriculum) || {}; return { min: c.prag_minute || 10, mes: c.prag_mesaje || 8 }; }
+function progresLectie(l) {
+  const p = pragLectie();
+  if (l.facuta) return 'făcută';
+  if (l.minute) return l.minute + ' din ' + p.min + ' minute';
+  if (l.mesaje) return l.mesaje + ' din ' + p.mes + ' mesaje scrise';
+  return '15–20 de minute de vorbit';
+}
+function lectiiInConstructie(s) {
+  const c = s.curriculum || {};
+  return !c.are_lectii && (c.stare === 'se_genereaza' || (s.are_nivel && c.stare !== 'eroare'));
+}
+function cardLectiaDeAzi(s) {
+  const c = s.curriculum || {};
+  if (!c.are_lectii) {
+    if (lectiiInConstructie(s)) {
+      return '<section class="card lectia-azi se-face"><span class="eticheta">Lecțiile tale</span><h2>Îți construiesc cele 100 de lecții…</h2>' +
+        '<p class="text-2">Pe nivelul tău, câte 5 pe fiecare unitate. Durează un minut-două; pagina se actualizează singură.</p><div class="bara-asteptare"><span></span></div></section>';
+    }
+    if (c.stare === 'eroare') {
+      return '<section class="card lectia-azi"><span class="eticheta">Lecțiile tale</span><h2>N-am reușit să construiesc lecțiile</h2>' +
+        '<p class="text-2">Se mai întâmplă la OpenAI. Mai încerc o dată?</p><button class="buton principal lat" id="refa-lectii">' + ICON.fulger + ' Construiește lecțiile</button></section>';
+    }
+    return '';
+  }
+  const u = s.unitate, lu = s.lectii_unitate || [], l = s.lectia;
+  const pr = s.praguri || { test: 70 };
+  if (u && !u.gata && lu.length && lu.every((x) => x.facuta)) {
+    const pasi = [];
+    if ((u.test || 0) < pr.test) pasi.push('<button class="pas" id="fin-test"><b>' + ICON.fulger + '</b><span><strong>Testul pe tema unității</strong>' + (u.test ? 'ai ' + u.test + '%, îți trebuie ' + pr.test + '%' : 'minim ' + pr.test + '% · cam 3 minute') + '</span></button>');
+    if (u.checkpoint && !u.examen) pasi.push('<button class="pas" id="fin-examen"><b>' + ICON.trofeu + '</b><span><strong>Testul vorbit de checkpoint</strong>10 minute, cu nivel și scor</span></button>');
+    return '<section class="card lectia-azi"><span class="eticheta">Unitatea ' + u.n + ' · toate cele 5 lecții făcute</span><h2>Încă un pas ca s-o închei</h2>' + pasi.join('') +
+      (l ? '<button class="buton-text" id="sari-inainte">sau mergi mai departe: lecția ' + nrLectie(l) + ', ' + esc(l.titlu) + '</button>' : '') + '</section>';
+  }
+  if (!l) {
+    return '<section class="card lectia-azi"><span class="eticheta">Lecțiile tale</span><h2>Ai făcut toate cele ' + (c.total || 100) + ' de lecții</h2>' +
+      '<p class="text-2">Fă testul vorbit ca să vezi unde ai ajuns. Din Setări îți poți reface lecțiile pe noul nivel.</p></section>';
+  }
+  const p = pragLectie();
+  const procent = Math.min(1, Math.max((l.minute || 0) / p.min, (l.mesaje || 0) / p.mes));
+  const vocab = (l.vocabular || []).slice(0, 6);
+  return '<section class="card lectia-azi"><div class="rand"><span class="eticheta">Lecția de azi · unitatea ' + l.unitate + ' · ' + l.index + ' din 5</span>' +
+    '<span class="lectia-nr">' + nrLectie(l) + '<small> din ' + (c.total || 100) + '</small></span></div>' +
+    '<h2>' + esc(l.titlu) + '</h2><p class="obiectiv">' + esc(l.obiectiv) + '</p>' +
+    (l.gramatica ? '<p class="gram">' + esc(l.gramatica) + '</p>' : '') +
+    (vocab.length ? '<div class="chips">' + vocab.map((v) => '<span class="chip">' + esc(v) + '</span>').join('') + '</div>' : '') +
+    (procent > 0 ? '<div class="lectie-bara"><span data-w="' + Math.round(procent * 100) + '"></span></div><p class="mic">' + esc(progresLectie(l)) + ' · se bifează la ' + p.min + ' minute de vorbit</p>' : '') +
+    '<div class="butoane"><button class="buton principal" id="lectia-start">' + ICON.mic + ' Începe lecția</button><button class="buton" id="lectia-detalii">' + ICON.carte + ' Ce înveți</button></div>' +
+    '<p class="mic centru contor-lectii">' + (c.facute || 0) + ' din ' + deLectii(c.total || 100) + ' ' + ((c.facute || 0) === 1 ? 'făcută' : 'făcute') + '</p></section>';
+}
+function legaLectiaDeAzi(s) {
+  const l = s.lectia;
+  const b = $('#lectia-start'); if (b && l) b.onclick = () => pornesteLectia({ mod: 'lectie', lectie: l.id, titlu: l.titlu });
+  const d = $('#lectia-detalii'); if (d && l) d.onclick = () => foaieLectie(l);
+  const si = $('#sari-inainte'); if (si && l) si.onclick = () => foaieLectie(l);
+  const ft = $('#fin-test'); if (ft) ft.onclick = () => { location.hash = '#/test/tema'; };
+  const fe = $('#fin-examen'); if (fe) fe.onclick = () => pornesteLectia({ mod: 'test' });
+  const rf = $('#refa-lectii');
+  if (rf) rf.onclick = async () => {
+    rf.disabled = true;
+    try { await api('/api/engleza/curriculum/genereaza', { method: 'POST', body: {} }); toast('Am pornit. Lecțiile apar în 1–2 minute.'); await incarcaStare(); vedereAcasa(++S.randare); } catch (e) { toast(e.message, true); rf.disabled = false; }
+  };
+  clearTimeout(S.timerLectii);
+  if (lectiiInConstructie(s)) {
+    S.timerLectii = setTimeout(async () => {
+      if (ruta().v !== 'acasa' || L.faza !== 'oprit') return;
+      try { await incarcaStare(); } catch (e) { /* data viitoare */ }
+      if (ruta().v === 'acasa' && L.faza === 'oprit') vedereAcasa(++S.randare);
+    }, 12000);
+  }
+}
+function foaieLectie(l) {
+  if (!l) return;
+  const c = (S.stare && S.stare.curriculum) || {};
+  strat('<span class="eticheta">Unitatea ' + l.unitate + ' · lecția ' + l.index + ' din 5 · ' + nrLectie(l) + ' din ' + (c.total || 100) + '</span>' +
+    '<h2>' + esc(l.titlu) + '</h2>' +
+    (l.facuta ? '<p class="bine stare-lectie">' + ICON.bifa + ' Făcută. O poți relua oricând.</p>' : (l.minute || l.mesaje ? '<p class="mic">' + esc(progresLectie(l)) + '</p>' : '')) +
+    '<p class="obiectiv">' + esc(l.obiectiv) + '</p>' +
+    (l.gramatica ? '<h3 class="sub-foaie">Ce exersezi</h3><p class="text-2">' + esc(l.gramatica) + '</p>' : '') +
+    (l.sarcina ? '<h3 class="sub-foaie">Ce faci în lecție</h3><p class="text-2">' + esc(l.sarcina) + '</p>' : '') +
+    ((l.vocabular || []).length ? '<h3 class="sub-foaie">Cuvinte</h3><div class="chips">' + l.vocabular.map((v) => '<span class="chip">' + esc(v) + '</span>').join('') + '</div>' : '') +
+    ((l.fraze || []).length ? '<h3 class="sub-foaie">Fraze</h3><ul class="fraze-lectie">' + l.fraze.map((f, i) => '<li><span>' + esc(f) + '</span><button class="buton-rotund mic" data-fraza="' + i + '" aria-label="Ascultă fraza">' + ICON.difuzor + '</button></li>').join('') + '</ul>' : '') +
+    '<div class="butoane-col"><button class="buton principal" id="fl-vorbit">' + ICON.mic + ' Lecția vorbită (15–20 min)</button><button class="buton" id="fl-scris">' + ICON.creion + ' Fă-o în scris</button></div>',
+  () => {
+    $('#fl-vorbit').onclick = () => { inchideStrat(); pornesteLectia({ mod: 'lectie', lectie: l.id, titlu: l.titlu }); };
+    $('#fl-scris').onclick = () => {
+      inchideStrat();
+      try { sessionStorage.setItem('engleza.scris.lectie', JSON.stringify({ id: l.id, titlu: l.titlu })); } catch (e) { /* ignor */ }
+      if (ruta().v === 'scris') randeaza(); else location.hash = '#/scris';
+    };
+    $$('[data-fraza]').forEach((b) => { b.onclick = () => reda(l.fraze[Number(b.dataset.fraza)], b); });
+  });
+  const st = $('#strat');
+  const vechi = st.onclick;
+  st.onclick = (e) => { if (e.target === st) { vechi(e); if (ruta().v === 'saptamana') history.replaceState(null, '', '#/parcurs'); } };
+}
+function grilaLectii(cur) {
+  if (!cur || !cur.are_lectii) return '';
+  const toate = [];
+  (cur.unitati || []).forEach((u) => (u.lectii || []).forEach((l) => toate.push(l)));
+  const azi = toate.find((l) => !l.facuta);
+  return '<div class="grila-lectii" role="list" aria-label="Cele ' + toate.length + ' de lecții, pe unități">' +
+    toate.map((l) => '<button role="listitem" class="' + (l.facuta ? 'facuta' : '') + (azi && l.id === azi.id ? ' azi' : '') + '" data-gl="' + esc(l.id) + '" aria-label="' + esc('Lecția ' + nrLectie(l) + ', unitatea ' + l.unitate + ': ' + l.titlu + (l.facuta ? ', făcută' : '')) + '" title="' + esc(nrLectie(l) + '. ' + l.titlu) + '"></button>').join('') +
+    '</div><div class="grila-axa"><span>unitatea 1</span><span>fiecare coloană = o unitate, 5 lecții</span><span>20</span></div>' +
+    '<div class="legenda-zile"><span class="cel exersat"></span><span class="mic">făcută</span><span class="cel azi"></span><span class="mic">urmează</span><span class="cel"></span><span class="mic">încă nu</span></div>';
+}
+function legaGrilaLectii(cur) {
+  $$('[data-gl]').forEach((b) => {
+    b.onclick = () => {
+      for (const u of cur.unitati || []) { const l = (u.lectii || []).find((x) => x.id === b.dataset.gl); if (l) return foaieLectie(l); }
+    };
+  });
+}
+
 function cardNivelDeInceput() {
   return '<section class="card inceput"><span class="eticheta">Primul pas</span><h2>Află-ți nivelul</h2>' +
-    '<p class="text-2">Programul tău de 20 de săptămâni a pornit azi. Ca să-l potrivesc pe tine, începe cu testul de nivel: întâi cel scris, apoi cel vorbit.</p>' +
+    '<p class="text-2">Programul tău a pornit azi. Începe cu testul de nivel: după el îți construiesc 100 de lecții pe nivelul tău, câte 5 pe fiecare din cele 20 de unități.</p>' +
     '<a class="pas" href="#/test/nivel"><b>1</b><span><strong>Test scris</strong>20 de întrebări, de la A1 la C1 · cam 8 minute</span></a>' +
     '<button class="pas" id="pas-vorbit"><b>2</b><span><strong>Test vorbit</strong>10 minute cu examinatorul · fluență, gramatică, vocabular, pronunție</span></button></section>';
 }
@@ -448,16 +574,17 @@ async function vedereAcasa(id) {
     '<div class="erou-cifre"><div class="cifra-erou' + ((s.serie || 0) > 0 ? ' aprinsa' : '') + '">' + ICON.flacara + '<b>' + (s.serie || 0) + '</b><span>' + ((s.serie || 0) === 1 ? 'zi la rând' : 'zile la rând') + '</span></div>' +
     '<div class="cifra-erou xp"><b>' + new Intl.NumberFormat('ro-RO').format(s.xp || 0) + '</b><span>XP</span></div>' +
     '<div class="bara-program" role="img" aria-label="' + Math.round(prog * 100) + '% din program"><span data-w="' + (prog * 100).toFixed(1) + '"></span></div>' +
-    '<span class="mic-erou">' + (s.saptamana >= 1 && s.saptamana <= 20 ? (s.unitati_gata || 0) + ' din 20 de unități terminate · ' + esc(ritmFataDePlan(s).text) : '') + '</span></div></div>' +
+    '<span class="mic-erou">' + (s.saptamana >= 1 && s.saptamana <= 20 ? ((s.curriculum && s.curriculum.are_lectii) ? (s.curriculum.facute || 0) + ' din ' + deLectii(s.curriculum.total || 100) + ' · ' : '') + (s.unitati_gata || 0) + ' din 20 de unități · ' + esc(ritmFataDePlan(s).text) : '') + '</span></div></div>' +
     (s.checkpoint ? '<button class="banda-checkpoint" id="checkpoint">' + ICON.trofeu + '<span>Săptămână de checkpoint: fă testul vorbit</span></button>' : '') +
     '</section>';
   if (!s.are_nivel) h += cardNivelDeInceput();
+  h += cardLectiaDeAzi(s);
   h += cardUnitate(s);
   h += zileleTale(s);
   h += planulZilei(s);
 
   h += '<section class="panou-start"><div class="moduri">' +
-    [['lectie', 'Lecție', 'tema săptămânii, cu corecturi', ICON.carte], ['liber', 'Conversație', 'liber, despre ce vrei', ICON.chat], ['test', 'Test vorbit', 'examen de 10 min, cu scor', ICON.trofeu]]
+    [['lectie', 'Lecție', (s.curriculum && s.curriculum.are_lectii) ? 'lecția de azi, cu corecturi' : 'tema unității, cu corecturi', ICON.carte], ['liber', 'Conversație', 'liber, despre ce vrei', ICON.chat], ['test', 'Test vorbit', 'examen de 10 min, cu scor', ICON.trofeu]]
       .map(([v, t, d, ic]) => '<button class="mod' + (setari.mod === v ? ' activ' : '') + '" data-mod="' + v + '">' + ic + '<b>' + t + '</b><span>' + d + '</span></button>').join('') + '</div>' +
     '<div class="segment" role="radiogroup" aria-label="Unde ești">' +
     [['birou', 'Spre birou'], ['casa', 'Spre casă'], ['acasa', 'Acasă']].map(([v, t]) => '<button role="radio" aria-checked="' + (drum === v) + '" class="' + (drum === v ? 'activ' : '') + '" data-drum="' + v + '">' + t + '</button>').join('') + '</div>' +
@@ -482,6 +609,7 @@ async function vedereAcasa(id) {
   const ct = $('#card-tinta'); if (ct) ct.onclick = foaieSetari;
   legaPlanul(s);
   legaUnitatea();
+  legaLectiaDeAzi(s);
   const ul = $('[data-lectie]'); if (ul) ul.onclick = () => { location.hash = '#/lectie/' + ul.dataset.lectie; };
 }
 function tile(href, icon, t, d, nr) {
@@ -502,7 +630,8 @@ function cardLectie(l, eUltima) {
 async function vedereParcurs(id) {
   titlu('Parcurs');
   if (!S.parcurs) $('#main').innerHTML = '<div class="incarca"><span class="punct-incarca"></span></div>';
-  S.parcurs = await api('/api/engleza/parcurs');
+  const [pc, curs] = await Promise.all([api('/api/engleza/parcurs'), api('/api/engleza/curriculum').catch(() => null)]);
+  S.parcurs = pc; S.curriculum = curs;
   if (id !== S.randare) return;
   const p = S.parcurs;
   const cur = p.curenta;
@@ -514,8 +643,12 @@ async function vedereParcurs(id) {
   const fmt = (d) => new Date(d).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' });
   let h = '<section class="card parcurs-cap"><div class="rand"><div><span class="eticheta">Programul de 20 de unități</span><h2>' + (cur >= 1 && cur <= 20 ? 'Unitatea ' + cur + ' din 20' : cur > 20 ? 'Program terminat' : 'Testul de nivel') + '</h2><p class="mic ' + (cur === 0 ? '' : dif > 0 ? 'bine' : dif < 0 ? 'rau' : '') + '">' + esc(ritm) + '</p></div>' + inel(prog, Math.round(prog * 100) + '%', 'parcurs') + '</div>' +
     '<p class="mic">Treci la unitatea următoare după ce lucrezi, nu după calendar. Planul: câte o unitate pe săptămână, ' + (p.inceput ? fmt(p.inceput) + ' – ' + fmt(p.sfarsit) : '') + '.</p></section>';
+  if (curs && curs.are_lectii) h += '<section class="card"><div class="rand"><h3>Cele ' + curs.total + ' de lecții</h3><span class="mic">' + facute(curs.facute) + '</span></div>' + grilaLectii(curs) + '</section>';
+  else if (curs && curs.stare === 'se_genereaza') h += '<section class="card lectia-azi se-face"><h3>Îți construiesc cele 100 de lecții…</h3><div class="bara-asteptare"><span></span></div></section>';
+  else if (!p.are_nivel) h += '<section class="card"><p class="text-2">Cele 100 de lecții apar aici după testul de nivel.</p></section>';
   h += '<div class="harta" id="harta"></div>';
   $('#main').innerHTML = h;
+  if (curs && curs.are_lectii) legaGrilaLectii(curs);
   deseneazaHarta(p);
 }
 function deseneazaHarta(p) {
@@ -562,9 +695,15 @@ function deseneazaHarta(p) {
     const tx = q.x + lat * (r + 12);
     s += '<text class="nod-et" x="' + tx.toFixed(1) + '" y="' + (q.y - 2) + '" text-anchor="' + (lat > 0 ? 'start' : 'end') + '">' + (w.n === 0 ? 'Testul de nivel' : (w.checkpoint ? 'Checkpoint · ' : '') + 'Unitatea ' + w.n) + '</text>';
     const sub = w.n === 0 ? (w.stare === 'trecuta' ? 'făcut' + (w.nivel ? ' · ' + w.nivel : '') : 'primul pas') :
-      w.progres && w.progres.gata ? 'terminată' : w.progres && w.progres.procent ? w.progres.procent + '% · ' + w.progres.vorbit_min + ' min vorbit' :
+      w.progres && w.progres.gata ? 'terminată' : w.progres && w.progres.lectii_total ? (w.progres.lectii_facute ? w.progres.lectii_facute + ' din 5 lecții' + (w.progres.test ? ' · test ' + w.progres.test + '%' : '') : (w.stare === 'curenta' ? 'acum · 5 lecții' : '5 lecții')) :
+      w.progres && w.progres.procent ? w.progres.procent + '% · ' + w.progres.vorbit_min + ' min vorbit' :
       w.stare === 'curenta' ? 'acum' : 'plan: ' + new Date(w.de_la).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' });
     s += '<text class="nod-sub" x="' + tx.toFixed(1) + '" y="' + (q.y + 15) + '" text-anchor="' + (lat > 0 ? 'start' : 'end') + '">' + esc(sub) + '</text>';
+    const cu = w.n > 0 && S.curriculum && (S.curriculum.unitati || []).find((x) => x.n === w.n);
+    if (cu) (cu.lectii || []).forEach((l, k) => {
+      const px = lat > 0 ? tx + 4 + k * 11 : tx - 4 - (4 - k) * 11;
+      s += '<circle class="nod-lectie' + (l.facuta ? ' facuta' : '') + '" cx="' + px.toFixed(1) + '" cy="' + (q.y + 28) + '" r="3.6"/>';
+    });
     s += '</g>';
   });
   s += '</svg>';
@@ -591,16 +730,19 @@ function foaieSaptamana(n) {
     return;
   }
   const ex = w.examen;
+  const cuU = S.curriculum && (S.curriculum.unitati || []).find((x) => x.n === n);
   strat('<span class="eticheta">' + esc(w.faza_nume || '') + ' · ' + new Date(w.de_la).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' }) + ' – ' + new Date(w.pana_la).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' }) + '</span>' +
     '<h2>' + (w.checkpoint ? 'Checkpoint · ' : '') + 'Unitatea ' + w.n + '</h2><p class="tema-foaie">' + esc(w.tema || '') + '</p>' +
-    (w.progres ? '<div class="cifre-mici"><span><b>' + w.progres.procent + '%</b> gata</span><span><b>' + w.progres.vorbit_min + '</b> min vorbit</span><span><b>' + (w.progres.test || 0) + '%</b> test</span><span><b>' + w.progres.scris + '</b> mesaje</span></div>' : '') +
+    (w.progres ? '<div class="cifre-mici"><span><b>' + w.progres.procent + '%</b> gata</span>' + (w.progres.lectii_total ? '<span><b>' + (w.progres.lectii_facute || 0) + '/5</b> lecții</span>' : '') + '<span><b>' + w.progres.vorbit_min + '</b> min vorbit</span><span><b>' + (w.progres.test || 0) + '%</b> test</span></div>' : '') +
     (ex ? '<div class="raport-mini"><span class="cefr">' + esc(ex.cefr) + '</span><span>fluență ' + ex.fluenta + ' · gramatică ' + ex.gramatica + ' · vocabular ' + ex.vocabular + ' · pronunție ' + ex.pronuntie + '</span></div>' : '') +
-    '<div class="butoane-col"><button class="buton principal" id="f-lectie">' + ICON.mic + ' Lecție vorbită pe tema asta</button>' +
+    (cuU ? '<h3 class="sub-foaie">Lecțiile unității</h3><ul class="plan-lista">' + cuU.lectii.map((l) => '<li class="' + (l.facuta ? 'facut' : '') + '" data-lectie-id="' + esc(l.id) + '"><span class="plan-bifa">' + (l.facuta ? ICON.bifa : '<i>' + l.index + '</i>') + '</span><span class="plan-text"><b>' + esc(l.titlu) + '</b><small>' + esc(progresLectie(l)) + '</small></span></li>').join('') + '</ul>' : '') +
+    '<div class="butoane-col"><button class="buton' + (cuU ? '' : ' principal') + '" id="f-lectie">' + ICON.mic + (cuU ? ' Conversație liberă pe tema asta' : ' Lecție vorbită pe tema asta') + '</button>' +
     '<button class="buton" id="f-scris">' + ICON.creion + ' Scrie pe tema asta</button>' +
     '<button class="buton" id="f-test">' + ICON.fulger + ' Test pe tema asta</button>' +
     (w.checkpoint ? '<button class="buton" id="f-examen">' + ICON.trofeu + ' Testul vorbit de checkpoint</button>' : '') + '</div>',
   () => {
-    $('#f-lectie').onclick = () => { inchideStrat(); pornesteLectia({ mod: 'lectie', saptamana: n }); };
+    $('#f-lectie').onclick = () => { inchideStrat(); pornesteLectia({ mod: cuU ? 'liber' : 'lectie', saptamana: n }); };
+    $$('[data-lectie-id]').forEach((li) => { li.onclick = () => foaieLectie(cuU.lectii.find((x) => x.id === li.dataset.lectieId)); });
     $('#f-scris').onclick = () => { inchideStrat(); sessionStorage.setItem('engleza.scris.sapt', String(n)); location.hash = '#/scris'; };
     $('#f-test').onclick = () => { inchideStrat(); location.hash = '#/test/tema-' + n; };
     const fe = $('#f-examen'); if (fe) fe.onclick = () => { inchideStrat(); pornesteLectia({ mod: 'test', saptamana: n }); };
@@ -768,7 +910,8 @@ async function finalTestNivel() {
     '<p class="text-2">' + r.corecte + ' din ' + r.total + ' răspunsuri corecte. Pe fiecare nivel:</p><div class="benzi">' +
     ['A1', 'A2', 'B1', 'B2', 'C1'].map((b) => { const x = benzi[b] || { corecte: 0, total: 0 }; const f = x.total ? x.corecte / x.total : 0;
       return '<div class="banda"><span>' + b + '</span><div class="scor-bara"><i data-w="' + Math.round(f * 100) + '"></i></div><b>' + x.corecte + '/' + x.total + '</b></div>'; }).join('') + '</div>' +
-    '<p class="text-2">Testul scris măsoară gramatica și vocabularul. Pentru vorbit și pronunție, fă și testul vorbit de 10 minute: el stabilește nivelul final.</p>' +
+    '<p class="bine">Îți construiesc acum cele 100 de lecții pe nivelul ' + esc(r.nivel || '') + '. Le găsești pe Acasă în 1–2 minute.</p>' +
+    '<p class="text-2">Testul scris măsoară gramatica și vocabularul. Pentru vorbit și pronunție, fă și testul vorbit de 10 minute: el stabilește nivelul final și îți potrivește lecțiile.</p>' +
     '<div class="butoane-col"><button class="buton principal" id="vorbit">' + ICON.mic + ' Acum testul vorbit</button><a class="buton" href="#/acasa">Mai târziu</a></div></div>';
   setTimeout(() => $$('.benzi [data-w]').forEach((el) => { el.style.width = el.dataset.w + '%'; }), 50);
   $('#vorbit').onclick = () => pornesteLectia({ mod: 'test' });
@@ -845,14 +988,25 @@ async function vedereScris(id) {
   try { C = JSON.parse(sessionStorage.getItem(CHEIE_SCRIS) || 'null'); } catch (e) { C = null; }
   const saptCeruta = sessionStorage.getItem('engleza.scris.sapt');
   sessionStorage.removeItem('engleza.scris.sapt');
-  if (!C || (saptCeruta !== null && Number(saptCeruta) !== C.saptamana)) {
-    C = { mesaje: [], start: Date.now(), saptamana: saptCeruta !== null ? Number(saptCeruta) : null };
+  let lectieCeruta = null;
+  try { lectieCeruta = JSON.parse(sessionStorage.getItem('engleza.scris.lectie') || 'null'); } catch (e) { lectieCeruta = null; }
+  sessionStorage.removeItem('engleza.scris.lectie');
+  if (!C || (saptCeruta !== null && Number(saptCeruta) !== C.saptamana) || (lectieCeruta && lectieCeruta.id !== C.lectie)) {
+    if (C && C.mesaje.some((m) => m.de === 'eu')) salveazaScrisInFundal(C);
+    C = { mesaje: [], start: Date.now(), saptamana: saptCeruta !== null ? Number(saptCeruta) : null,
+      lectie: lectieCeruta ? lectieCeruta.id : null, lectieTitlu: lectieCeruta ? lectieCeruta.titlu : null };
   }
   deseneazaScris();
   if (!C.mesaje.length) await raspunsProfesor(id);
 }
+function corpScris(c) {
+  const transcript = c.mesaje.map((m) => ({ de: m.de === 'eu' ? 'eu' : 'profesor', text: m.text, ts: m.ts }));
+  return { mod: 'text', transcript, durata_s: Math.round((Date.now() - c.start) / 1000), saptamana: c.saptamana, lectie: c.lectie || undefined,
+    unitate: c.saptamana !== null ? c.saptamana : (S.stare && S.stare.saptamana) || undefined };
+}
+function salveazaScrisInFundal(c) { api('/api/engleza/lectie', { method: 'POST', body: corpScris(c) }).catch(() => {}); }
 function deseneazaScris() {
-  let h = '<div class="chat"><div class="chat-sus"><span class="mic">' + (C.saptamana !== null ? 'Tema săptămânii ' + C.saptamana : 'Conversație liberă în scris') + '</span><button class="buton mic-b" id="termina-scris">Termină</button></div><div class="chat-bule" id="bule">';
+  let h = '<div class="chat"><div class="chat-sus"><span class="mic">' + (C.lectieTitlu ? 'Lecția · ' + esc(C.lectieTitlu) : C.saptamana !== null ? 'Tema unității ' + C.saptamana : 'Conversație liberă în scris') + '</span><button class="buton mic-b" id="termina-scris">Termină</button></div><div class="chat-bule" id="bule">';
   C.mesaje.forEach((m, i) => {
     h += '<div class="bula ' + (m.de === 'eu' ? 'eu' : 'prof') + '">' + esc(m.text) + (m.de !== 'eu' ? '<button class="buton-rotund mic" data-reda="' + i + '" aria-label="Ascultă">' + ICON.difuzor + '</button>' : '') + '</div>';
     if (m.corectura) h += '<div class="corectura"><span class="eticheta">Mai bine așa</span><b>' + esc(m.corectura.corect) + '</b>' + (m.corectura.nota_ro ? '<small>' + esc(m.corectura.nota_ro) + '</small>' : '') + '</div>';
@@ -891,6 +1045,7 @@ async function raspunsProfesor(id) {
   try {
     const corp = { mesaje: C.mesaje.map((m) => ({ de: m.de, text: m.text })) };
     if (C.saptamana !== null) corp.saptamana = C.saptamana;
+    if (C.lectie) corp.lectie = C.lectie;
     const r = await api('/api/engleza/chat', { method: 'POST', body: corp });
     C.asteapta = false;
     if (r.corectura) { const ultim = C.mesaje[C.mesaje.length - 1]; if (ultim && ultim.de === 'eu') ultim.corectura = r.corectura; }
@@ -915,10 +1070,8 @@ async function trimiteScris() {
 async function terminaScris() {
   const ale = C.mesaje.filter((m) => m.de === 'eu').length;
   if (ale < 1) { sessionStorage.removeItem(CHEIE_SCRIS); C = null; location.hash = '#/acasa'; return; }
-  const transcript = [];
-  C.mesaje.forEach((m) => { transcript.push({ de: m.de === 'eu' ? 'eu' : 'profesor', text: m.text, ts: m.ts }); });
   try {
-    const r = await api('/api/engleza/lectie', { method: 'POST', body: { mod: 'text', transcript, durata_s: Math.round((Date.now() - C.start) / 1000), saptamana: C.saptamana, unitate: C.saptamana !== null ? C.saptamana : (S.stare && S.stare.saptamana) || undefined } });
+    const r = await api('/api/engleza/lectie', { method: 'POST', body: corpScris(C) });
     sessionStorage.removeItem(CHEIE_SCRIS); C = null;
     toast('Salvat. Rezumatul vine în câteva secunde.');
     location.hash = '#/lectie/' + r.id;
@@ -1006,9 +1159,9 @@ function hartaZile(zileActive, zileDeschise) {
 async function vedereProgres(id) {
   titlu('Progres');
   $('#main').innerHTML = '<div class="incarca"><span class="punct-incarca"></span></div>';
-  const p = await api('/api/engleza/progres');
+  const [p, cur] = await Promise.all([api('/api/engleza/progres'), api('/api/engleza/curriculum').catch(() => null)]);
   if (id !== S.randare) return;
-  S.progres = p;
+  S.progres = p; S.curriculum = cur;
   graficeActive = [];
   const ore = Math.floor((p.minute || 0) / 60), min = (p.minute || 0) % 60;
   let h = '<section class="erou mic-erou-p"><div class="erou-sus"><div class="erou-text"><span class="eticheta-erou">Nivelul tău acum</span><h2 class="cefr-mare">' + esc(p.nivel || '—') + '</h2><p class="tema">' + (p.nivel ? 'estimat din lecții și din testele vorbite' : 'îl afli după prima lecție sau din testul vorbit') + '</p></div>' +
@@ -1016,6 +1169,7 @@ async function vedereProgres(id) {
   h += '<div class="dale">' +
     dala(p.lectii, p.lectii === 1 ? 'sesiune' : 'sesiuni') + dala(ore ? ore + ' h ' + min + ' m' : min + ' min', 'de engleză vorbită') +
     dala(p.cuvinte, 'cuvinte și expresii', p.stapanite + ' stăpânite') + dala(p.teste, p.teste === 1 ? 'test' : 'teste') + '</div>';
+  if (cur && cur.are_lectii) h += '<section class="card"><div class="rand"><h3>Lecțiile cursului</h3><span class="mic">' + cur.facute + ' din ' + cur.total + '</span></div>' + grilaLectii(cur) + '</section>';
   const nivelP = (p.nivel_istoric || []).map((x) => ({ x: new Date(x.data.replace(' ', 'T')).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' }), v: cefrNr(x.nivel), tip: '<b>' + esc(x.nivel) + '</b><br>' + esc(x.sursa) + ', ' + zi(x.data) }));
   h += '<section class="card"><div class="rand"><h3>Nivelul în timp</h3><span class="mic">A1 → C2</span></div>' + (nivelP.length ? grafic(nivelP, { tip: 'linie', trepte: true, titlu: 'Nivelul în timp', min: 1, max: 6, grila: [1, 2, 3, 4, 5, 6], etichetaY: (v) => ['', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'][Math.round(v)] || '' }) : '<p class="text-2">Apare după prima lecție.</p>') + '</section>';
   const zile = (p.zile30 || []).map((z) => ({ x: new Date(z.zi).toLocaleDateString('ro-RO', { day: 'numeric', month: 'numeric' }), v: z.minute, tip: '<b>' + new Date(z.zi).toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'short' }) + '</b><br>' + nf.format(z.minute) + ' minute vorbite' }));
@@ -1029,6 +1183,7 @@ async function vedereProgres(id) {
   h += '<section class="card"><div class="rand"><h3>Zilele în care ai exersat</h3><span class="mic">ultimele 4 luni</span></div>' + hartaZile(p.zile_active, p.zile_deschise) + '</section>';
   h += '<h2 class="titlu">Insigne</h2><div class="insigne">' + (p.insigne || []).map((b) => '<div class="insigna-p' + (b.castigata ? ' castigata' : '') + '" title="' + esc(b.descriere) + '"><span class="insigna-icon">' + (b.castigata ? ICON.trofeu : ICON.bifa) + '</span><b>' + esc(b.nume) + '</b><small>' + esc(b.descriere) + '</small></div>').join('') + '</div>';
   $('#main').innerHTML = h;
+  if (cur && cur.are_lectii) legaGrilaLectii(cur);
   legaGrafice();
 }
 function dala(v, et, sub) { return '<div class="dala"><b>' + esc(v) + '</b><span>' + esc(et) + '</span>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</div>'; }
@@ -1079,7 +1234,7 @@ const L = {
 function ecranLive() {
   const examen = L.mod === 'test';
   $('#main').innerHTML = '<div class="live' + (examen ? ' examen' : '') + '">' +
-    '<div class="live-sus"><span class="eticheta-live">' + (examen ? 'Test vorbit' : (L.numeScenariu ? 'Simulare · ' + esc(L.numeScenariu) : NUME_MOD[L.mod])) + (L.saptamana !== null ? ' · săpt. ' + L.saptamana : '') + '</span><span class="mic"><span id="ceas">0:00</span> · <span id="cost">$0.00</span></span></div>' +
+    '<div class="live-sus"><span class="eticheta-live">' + (examen ? 'Test vorbit' : (L.numeScenariu ? 'Simulare · ' + esc(L.numeScenariu) : (L.lectieTitlu ? 'Lecția · ' + esc(L.lectieTitlu) : NUME_MOD[L.mod]))) + (L.saptamana !== null ? ' · săpt. ' + L.saptamana : '') + '</span><span class="mic"><span id="ceas">0:00</span> · <span id="cost">$0.00</span></span></div>' +
     '<div class="orb-live" id="orb"><span class="orb-halou"></span><span class="orb-corp"></span></div>' +
     '<p class="stare" id="stare">Mă conectez…</p><p class="mic centru" id="sub-stare">' + (examen ? 'Fără corecturi în timpul testului. La final primești nivelul și scorurile.' : 'Vorbește liber. Profesorul te așteaptă când faci pauze.') + '</p>' +
     '<div class="comenzi">' +
@@ -1198,8 +1353,13 @@ async function conecteaza(reluare) {
   const corp = { mod: L.mod, drum: S.drum || drumImplicit(), viteza: setari.viteza, rabdare: setari.rabdare, zgomot: setari.zgomot, reluare: reluare || [] };
   if (L.saptamana !== null) corp.saptamana = L.saptamana;
   if (L.scenariu) corp.scenariu = L.scenariu;
+  if (L.lectie) corp.lectie = L.lectie;
   const s = await api('/api/engleza/sesiune', { method: 'POST', body: corp });
   if (s.preturi) PRET = s.preturi;
+  if (s.lectie && !L.lectie) {
+    L.lectie = s.lectie; L.lectieTitlu = s.lectie_titlu || null;
+    const et = $('.eticheta-live'); if (et && L.lectieTitlu) et.textContent = 'Lecția · ' + L.lectieTitlu;
+  }
   const pc = new RTCPeerConnection();
   const sunet = $('#sunet');
   pc.ontrack = (e) => { sunet.srcObject = e.streams[0]; sunet.play().catch(() => {}); leagaSunetProfesor(e.streams[0]); };
@@ -1262,7 +1422,7 @@ async function tineEcranul() {
 function salveazaLocal() {
   try {
     localStorage.setItem(CHEIE_LECTIE, JSON.stringify({ transcript: L.transcript, durata_s: Math.round((Date.now() - L.inceput) / 1000),
-      cost_usd: Math.round(L.cost * 10000) / 10000, mod: L.mod, drum: S.drum, raport_test: L.raport, saptamana: L.saptamana }));
+      cost_usd: Math.round(L.cost * 10000) / 10000, mod: L.mod, drum: S.drum, raport_test: L.raport, saptamana: L.saptamana, lectie: L.lectie || undefined }));
   } catch (e) { /* ignor */ }
 }
 async function pornesteLectia(opt) {
@@ -1270,7 +1430,8 @@ async function pornesteLectia(opt) {
   if (!window.RTCPeerConnection || !navigator.mediaDevices) { toast('Browserul ăsta nu poate face convorbiri.', true); return; }
   Object.assign(L, { faza: 'conectare', transcript: [], cost: 0, mut: false, oprireCeruta: false, reconectari: 0, raport: null, apeluri: new Set(),
     mod: (opt && opt.mod) || 'lectie', saptamana: opt && Number.isInteger(opt.saptamana) ? opt.saptamana : null,
-    scenariu: (opt && opt.scenariu) || null, numeScenariu: (opt && opt.numeScenariu) || null });
+    scenariu: (opt && opt.scenariu) || null, numeScenariu: (opt && opt.numeScenariu) || null,
+    lectie: (opt && opt.lectie) || null, lectieTitlu: (opt && opt.titlu) || null });
   location.hash = '#/live';
   document.body.classList.add('in-lectie');
   ecranLive();
@@ -1321,10 +1482,21 @@ async function terminaLectia(fortat) {
   const sesiune = { transcript: L.transcript, durata_s: durataS, cost_usd: Math.round(L.cost * 10000) / 10000, mod: L.mod, drum: S.drum, raport_test: L.raport };
   if (L.saptamana !== null) sesiune.saptamana = L.saptamana;
   sesiune.unitate = L.saptamana !== null ? L.saptamana : (S.stare && S.stare.saptamana) || undefined;
+  if (L.lectie) sesiune.lectie = L.lectie;
+  let notaLectie = '';
+  if (L.lectie && L.mod !== 'test') {
+    const p = pragLectie();
+    const inainte = [S.stare && S.stare.lectia].concat((S.stare && S.stare.lectii_unitate) || []).find((x) => x && x.id === L.lectie);
+    const tot = ((inainte && inainte.minute) || 0) + Math.round(durataS / 60);
+    notaLectie = (inainte && inainte.facuta) || tot >= p.min ? '<p class="bine">' + ICON.bifa + ' Lecția „' + esc(L.lectieTitlu || '') + '” e bifată.</p>'
+      : '<p class="text-2">Lecția „' + esc(L.lectieTitlu || '') + '”: ' + tot + ' din ' + p.min + ' minute. Data viitoare continui de unde ai rămas.</p>';
+  } else if (L.mod === 'test' && L.raport && L.raport.cefr && S.stare && S.stare.curriculum && (S.stare.curriculum.facute || 0) < 3) {
+    notaLectie = '<p class="text-2">Îți potrivesc lecțiile și pe rezultatul ăsta, în câteva minute.</p>';
+  }
   L.faza = 'oprit';
   const minuteNoi = Math.round(durataS / 60);
   $('#main').innerHTML = '<div class="final-test">' + (L.raport && L.raport.cefr ? raportScoruri(L.raport) : inel(Math.min(1, minuteNoi / Math.max(5, setari.obiectiv)), durata(durataS), 'minute')) +
-    '<h2>' + (L.mod === 'test' ? (L.raport ? 'Testul s-a încheiat' : 'Test oprit înainte de final') : 'Lecție terminată') + '</h2><p class="text-2">' + (minuteNoi ? '+' + minuteNoi + ' XP · ' : '') + dolari(L.cost) + '</p><p class="text-2" id="mesaj-final">Salvez și pregătesc rezumatul…</p>' +
+    '<h2>' + (L.mod === 'test' ? (L.raport ? 'Testul s-a încheiat' : 'Test oprit înainte de final') : 'Lecție terminată') + '</h2><p class="text-2">' + (minuteNoi ? '+' + minuteNoi + ' XP · ' : '') + dolari(L.cost) + '</p>' + notaLectie + '<p class="text-2" id="mesaj-final">Salvez și pregătesc rezumatul…</p>' +
     '<div class="butoane-col"><a class="buton principal" href="#/acasa">Acasă</a></div></div>';
   if (L.raport || minuteNoi >= 10) confetti();
   history.replaceState(null, '', '#/acasa');
@@ -1438,6 +1610,8 @@ function foaieSetari() {
     '<label class="setare comutator"><input type="checkbox" id="subtitrari"' + (setari.subtitrari ? ' checked' : '') + '><span>Arată textul conversației în lecție</span></label>' +
     '<label class="setare"><span>Ținta</span><select id="tinta"><option value="">automat: nivelul următor</option>' + ['B1', 'B2', 'C1'].map((t) => '<option value="' + t + '"' + (setari.tinta === t ? ' selected' : '') + '>' + t + '</option>').join('') + '</select></label>' +
     '<div class="setare"><span>Programul de 20 de săptămâni</span><small class="mic">' + (S.stare && S.stare.program ? new Date(S.stare.program.inceput).toLocaleDateString('ro-RO', { day: 'numeric', month: 'long' }) + ' – ' + new Date(S.stare.program.sfarsit).toLocaleDateString('ro-RO', { day: 'numeric', month: 'long', year: 'numeric' }) : '') + '</small><button class="buton mic-b" id="reporneste">Repornește programul de azi</button></div>' +
+    '<div class="setare"><span>Cele 100 de lecții</span><small class="mic">' + (S.stare && S.stare.curriculum && S.stare.curriculum.are_lectii ? facute(S.stare.curriculum.facute) + ' din ' + S.stare.curriculum.total + ' · potrivite pe ' + esc(nivelCurs(S.stare.curriculum.nivel)) : 'apar după testul de nivel') + '</small>' +
+    (S.stare && (S.stare.are_nivel || (S.stare.curriculum && S.stare.curriculum.are_lectii)) ? '<button class="buton mic-b" id="refa-curs">Refă lecțiile pe nivelul de acum</button>' : '') + '</div>' +
     '<p class="mic">Luna asta: ' + dolari((S.stare && S.stare.cost_luna_usd) || 0) + ' la OpenAI. Modelul: ' + esc((S.stare && S.stare.model) || '') + '.</p>' +
     '<button class="buton principal lat" id="inchide-setari">Gata</button>',
   () => {
@@ -1458,6 +1632,12 @@ function foaieSetari() {
         inchideStrat();
         randeaza();
       } catch (e) { toast(e.message, true); }
+    };
+    const rc = $('#refa-curs');
+    if (rc) rc.onclick = async () => {
+      if (!confirm('Refaci lecțiile pe nivelul tău de acum? Bifele rămân pe pozițiile lor (lecția 1, 2, 3…), dar conținutul lecțiilor se schimbă.')) return;
+      rc.disabled = true;
+      try { await api('/api/engleza/curriculum/genereaza', { method: 'POST', body: {} }); toast('Le refac. Sunt gata în 1–2 minute.'); inchideStrat(); await incarcaStare(); randeaza(); } catch (e) { toast(e.message, true); rc.disabled = false; }
     };
     $('#inchide-setari').onclick = () => { inchideStrat(); if (ruta().v === 'acasa') randeaza(); };
   });

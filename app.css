@@ -524,3 +524,36 @@ body.in-lectie .toast { bottom: calc(20px + env(safe-area-inset-bottom)); }
 .nod-progres { fill: none; stroke: var(--lime); stroke-width: 4; stroke-linecap: round; }
 .parcurs-cap .mic.bine { color: var(--lime-2); }
 .parcurs-cap .mic.rau { color: var(--rau); }
+
+/* ---------- lecțiile cursului (100, câte 5 pe unitate) ---------- */
+.lectia-azi { border-color: var(--lime); background: linear-gradient(160deg, var(--lime-fond), var(--card) 62%); }
+.lectia-azi h2 { margin: 4px 0 6px; font-size: 22px; line-height: 1.25; }
+.lectia-azi.se-face h2, .lectia-azi.se-face h3 { font-size: 18px; margin: 2px 0 6px; }
+.obiectiv { font-size: 14.5px; color: var(--text-2); margin: 0 0 6px; }
+.gram { font-size: 13px; color: var(--text-3); margin: 0 0 4px; }
+.lectia-nr { font: 600 22px/1 'Rubik', sans-serif; color: var(--lime-2); }
+.lectia-nr small { font: 400 12px 'Lexend', sans-serif; color: var(--text-3); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.chip { padding: 4px 10px; border-radius: 999px; background: var(--card-2); border: 1px solid var(--linie-2); font-size: 12.5px; color: var(--text-2); }
+.lectie-bara { height: 6px; border-radius: 3px; background: var(--card-2); overflow: hidden; margin: 12px 0 4px; }
+.lectie-bara span { display: block; height: 100%; width: 0; background: var(--lime); border-radius: 3px; transition: width 0.6s ease; }
+.contor-lectii { margin: 10px 0 0; }
+.bara-asteptare { height: 6px; border-radius: 3px; background: var(--card-2); overflow: hidden; margin-top: 12px; position: relative; }
+.bara-asteptare span { position: absolute; top: 0; bottom: 0; left: -35%; width: 35%; background: var(--lime); border-radius: 3px; animation: asteapta 1.4s ease-in-out infinite; }
+@keyframes asteapta { to { left: 100%; } }
+.sub-foaie { font: 500 12px 'Lexend', sans-serif; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3); margin: 16px 0 6px; }
+.stare-lectie { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; }
+.stare-lectie svg { width: 16px; height: 16px; }
+.fraze-lectie { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.fraze-lectie li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 12px; background: var(--card-2); font-size: 14px; }
+.plan-bifa i { font: 600 12px 'Rubik', sans-serif; font-style: normal; color: var(--text-3); }
+.grila-lectii { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); grid-template-rows: repeat(5, auto); grid-auto-flow: column; gap: 3px; margin: 12px 0 4px; }
+.grila-lectii button { aspect-ratio: 1; width: 100%; border: 1px solid var(--linie-2); padding: 0; border-radius: 3px; background: var(--card-2); }
+.grila-lectii button.facuta { background: var(--lime); border-color: var(--lime); }
+.grila-lectii button.azi { background: var(--lime-fond); border: 2px solid var(--lime); animation: pulseaza 1.6s ease-in-out infinite; }
+.grila-axa { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--text-3); margin-bottom: 8px; }
+.legenda-zile .cel.azi { background: var(--lime-fond); border: 2px solid var(--lime); }
+.nod-lectie { fill: var(--card-2); stroke: var(--linie-2); stroke-width: 1; }
+.nod-lectie.facuta { fill: var(--lime); stroke: var(--lime); }
+.lectia-azi .butoane .buton { white-space: nowrap; padding: 10px 12px; }
+.lectia-azi .butoane .buton.principal { flex: 1.5; }
