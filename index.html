@@ -7,22 +7,34 @@
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <title>English</title>
-<meta name="description" content="Lecții de engleză vorbită, cu profesor pe voce.">
-<meta name="theme-color" content="#0D1C2B">
+<meta name="description" content="Lecții de engleză vorbită, parcurs, teste și progres.">
+<meta name="theme-color" content="#081320">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="stylesheet" href="app.css?v=1">
+<link rel="stylesheet" href="app.css?v=2">
 </head>
 <body>
 <header class="sus">
-  <div class="sus-titlu"><span class="marca" aria-hidden="true"></span><h1>English</h1></div>
-  <span id="chip-sapt" class="chip-sus"></span>
+  <div class="sus-titlu"><span class="marca" aria-hidden="true"></span><h1 id="titlu">English</h1></div>
+  <div class="sus-dreapta">
+    <span class="pastila" id="pastila-serie" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 4 5 5.5 5 10.5A5 5 0 0 1 7 12.5c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-6 1-9z"/></svg><b id="nr-serie">0</b></span>
+    <span class="pastila xp" id="pastila-xp" hidden><b id="nr-xp">0</b> XP</span>
+    <button class="buton-icon" id="setari" type="button" aria-label="Setări"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>
+  </div>
 </header>
 <main id="main" tabindex="-1"></main>
+<nav class="jos" id="tabbar" aria-label="Secțiuni">
+  <a href="#/acasa" data-tab="acasa"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Acasă</span></a>
+  <a href="#/parcurs" data-tab="parcurs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20c0-4 12-4 12-8S6 8 6 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="6" cy="20" r="2" fill="currentColor"/><circle cx="6" cy="4" r="2" fill="currentColor"/></svg><span>Parcurs</span></a>
+  <a href="#/exerseaza" data-tab="exerseaza"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg><span>Exersează</span><b class="insigna" id="ins-carduri"></b></a>
+  <a href="#/progres" data-tab="progres"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Progres</span></a>
+  <a href="#/istoric" data-tab="istoric"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2M3 12a9 9 0 1 0 3-6.7M3 4v4h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Istoric</span></a>
+</nav>
 <audio id="sunet" autoplay playsinline></audio>
+<canvas id="confetti" class="confetti" aria-hidden="true"></canvas>
 <div id="strat" class="strat" hidden></div>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-<script src="app.js?v=1"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

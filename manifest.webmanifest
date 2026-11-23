@@ -1,7 +1,7 @@
 {
   "name": "English — lecții vorbite",
   "short_name": "English",
-  "description": "Lecții de engleză vorbită, cu profesor pe voce.",
+  "description": "Lecții de engleză vorbită, parcurs, teste și progres.",
   "lang": "ro",
   "id": "./",
   "start_url": "./",
