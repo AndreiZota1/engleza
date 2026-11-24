@@ -17,7 +17,7 @@ const gol = (x) => x === null || x === undefined || (typeof x === 'number' && is
 
 let cfg = null;
 try { cfg = JSON.parse(localStorage.getItem(CHEIE_CFG) || 'null'); } catch (e) { cfg = null; }
-const VERSIUNE_APP = '1.5';
+const VERSIUNE_APP = '1.5.1';
 let setari = { mod: 'lectie', viteza: 0.95, rabdare: 'low', zgomot: 'auto', ecran: true, subtitrari: false, obiectiv: 30 };
 try { Object.assign(setari, JSON.parse(localStorage.getItem(CHEIE_SETARI) || '{}')); } catch (e) { /* implicite */ }
 function salveazaSetari() { try { localStorage.setItem(CHEIE_SETARI, JSON.stringify(setari)); } catch (e) { /* ignor */ } }
@@ -1559,7 +1559,7 @@ function deseneazaVerificarea() {
   const final = $('.final-live');
   el.innerHTML = '<div class="rand"><span class="eticheta">Verificarea finală' + (v.incercari > 1 ? ' · încercarea ' + v.incercari : '') + '</span><span class="mic">' + v.itemi.filter((x) => x.corect).length + ' corecte · îți trebuie ' + L.plan.prag + ' din ' + t + '</span></div>' +
     '<div class="verif-puncte">' + Array.from({ length: t }, (_, i) => { const x = dupaNr[i + 1]; return '<span class="' + (x ? (x.corect ? 'ok' : 'gresit') : '') + '">' + (x ? (x.corect ? '✓' : '✗') : i + 1) + '</span>'; }).join('') + '</div>' +
-    (ultim && !ultim.corect && ultim.varianta_buna ? '<p class="mic">Corect era: <b>' + esc(ultim.varianta_buna) + '</b></p>' : '') +
+    (ultim && !ultim.corect && ultim.varianta_buna ? '<p class="mic">Corect era: <b>' + esc(ultim.varianta_buna) + '</b>' + (ultim.motiv_ro ? ' · ' + esc(ultim.motiv_ro) : '') + '</p>' : '') +
     (!v.gata && urm ? '<p class="mic text-2">Sarcina ' + sarc.nr + ': ' + esc(urm.ro || urm.cerinta || '') + '</p>' : '');
   if (final) el.appendChild(final);
 }
@@ -1571,13 +1571,33 @@ function urmatoareaSarcina() {
   }
   return null;
 }
-function notaVerificare(a) {
+function gardaVerificare(a) { // 1.5.1: null = se poate nota; altfel, motivul pentru profesor
   const P = L.plan;
   if (!P || !L.verif) return { ok: false, error: 'no lesson plan in this session' };
   const v = L.verif;
-  if (L.pas !== 5) seteazaPas(5);
-  const nr = Math.max(1, Math.min(P.total, parseInt(a.nr, 10) || (v.itemi.length + 1)));
-  v.itemi = v.itemi.filter((x) => x.nr !== nr).concat([{ nr, a_spus: String(a.a_spus || '').slice(0, 400), corect: a.corect === true, varianta_buna: String(a.varianta_buna || '').slice(0, 400) }]).sort((x, y) => x.nr - y.nr);
+  // 1.5.1: în 1.5 profesorul chema verificare și la exerciții (24.11, U1L1), iar exercițiul lua locul sarcinii; acum se respinge
+  if (L.pas !== 5) {
+    if (L.diag) L.diag.verif_respinse = (L.diag.verif_respinse || 0) + 1;
+    return { ok: false, scored: false, error: 'Not scored: you are in step ' + (L.pas || 1) + ', which is practice. The function verificare is only for the five final-check tasks. Do not mention this to Andrei; just go on with this step. When step 4 is done, call pas with 5 and read task 1 from its result.' };
+  }
+  const sarc = urmatoareaSarcina();
+  const nr = Math.max(1, Math.min(P.total, parseInt(a.nr, 10) || (sarc ? sarc.nr : v.itemi.length + 1)));
+  if (sarc && nr !== sarc.nr && !v.itemi.some((x) => x.nr === nr)) {
+    if (L.diag) L.diag.verif_respinse = (L.diag.verif_respinse || 0) + 1;
+    return { ok: false, scored: false, error: 'Task ' + nr + ' has not been asked yet. The current task is ' + sarc.nr + ': "' + sarc.text + '". Ask exactly that and judge his answer to it.' };
+  }
+  if ((L.intrari || 0) <= (v.intrariLaSarcina || 0)) { // 1.5.1: modelul își nota singur sarcina, înainte să răspundă Andrei
+    if (L.diag) L.diag.verif_respinse = (L.diag.verif_respinse || 0) + 1;
+    return { ok: false, scored: false, error: 'Not scored: Andrei has not answered yet. Ask the task (if you have not) and wait for his answer; only then call verificare. Do not mention this to him.' };
+  }
+  a.nr = nr;
+  return null;
+}
+function notaVerificare(a) { // după gardă, cu nota examinatorului de pe server (sau a profesorului, dacă serverul nu răspunde)
+  const P = L.plan, v = L.verif, nr = a.nr;
+  if (!P || !v) return { ok: false, error: 'no lesson plan in this session' };
+  v.ultimNr = nr;
+  v.itemi = v.itemi.filter((x) => x.nr !== nr).concat([{ nr, a_spus: String(a.a_spus || '').slice(0, 400), corect: a.corect === true, varianta_buna: String(a.varianta_buna || '').slice(0, 400), motiv_ro: String(a.motiv_ro || '').slice(0, 160), judecat: a.judecat || 'profesor' }]).sort((x, y) => x.nr - y.nr);
   const corecte = v.itemi.filter((x) => x.corect).length;
   let out;
   if (v.itemi.length >= P.total) {
@@ -1589,6 +1609,7 @@ function notaVerificare(a) {
         : 'Tell him the score, name the one structure to review, and tell him he can say "check again" to retry the five tasks.' };
   } else {
     out = { ok: true, answered: v.itemi.length, correct_so_far: corecte, next_task: urmatoareaSarcina() };
+    v.intrariLaSarcina = L.intrari || 0;
   }
   deseneazaPasii();
   deseneazaVerificarea();
@@ -1638,7 +1659,7 @@ function notaApp(text) {
   golesteCoadaApp();
 }
 function golesteCoadaApp() {
-  if (!L.coadaApp.length || L.raspunsActiv || L.audioProf || L.vorbeste || !L.dc || L.dc.readyState !== 'open') return;
+  if (!L.coadaApp.length || L.raspunsActiv || L.audioProf || L.vorbeste || L.judecari > 0 || !L.dc || L.dc.readyState !== 'open') return;
   const text = L.coadaApp.shift();
   trimiteEveniment({ type: 'conversation.item.create', item: { type: 'message', role: L.rolNote, content: [{ type: 'input_text', text: '[APP] ' + text }] } });
   trimiteEveniment({ type: 'response.create' });
@@ -1660,9 +1681,41 @@ function nuAstaAmZis() {
   if (eu) eu.contestat = true;
   if (L.diag && L.diag.nu_am_zis.length < 50) L.diag.nu_am_zis.push({ t: secundeLive(), eu: eu ? eu.text.slice(0, 300) : '', prof: prof ? prof.text.slice(0, 300) : '', lp: eu ? eu.lp : null });
   opresteProfesorul();
-  notaApp('Andrei says you misheard him: he did not say what you understood or corrected. Say "Sorry, my mistake." in a few words, drop that correction and go on. Ask him to say it again only if you really need it.');
+  const v = L.verif;
+  if (L.pas === 5 && v && v.ultimNr && v.itemi.some((x) => x.nr === v.ultimNr) && !(v.gata && v.trecuta)) {
+    // în verificare, sarcina se reia și verdictul nou îl înlocuiește pe cel vechi (în 1.5 rămânea greșită)
+    v.intrariLaSarcina = L.intrari || 0;
+    notaApp('Andrei says you misheard his answer to task ' + v.ultimNr + ' of the final check. Say "Sorry." and ask him to answer task ' + v.ultimNr + ' again. Wait for his new answer; only then call verificare again with nr ' + v.ultimNr + ' (the new verdict replaces the old one), then go on with the next task.');
+  } else {
+    notaApp('Andrei says you misheard him: he did not say what you understood or corrected. Say "Sorry, my mistake." in a few words, drop that correction and go on. Ask him to say it again only if you really need it.');
+  }
   toast('I-am spus că a auzit greșit.');
   deseneazaSubtitrari();
+}
+
+/* 1.5.1: nota o dă examinatorul de pe server (model de text). Profesorul vocal nota inconsecvent: aceleași răspunsuri, o dată 4/5, altă dată 1/5. */
+async function judecaSiRaspunde(a, callId) {
+  L.judecari = (L.judecari || 0) + 1;
+  seteazaStare('Verific răspunsul…', 'gandeste');
+  let j = null;
+  try {
+    j = await Promise.race([
+      api('/api/engleza/judeca', { method: 'POST', body: { lectie: L.lectie, nr: a.nr, a_spus: a.a_spus } }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('examinatorul n-a răspuns în 10 s')), 10000)),
+    ]);
+  } catch (e) { if (L.diag && L.diag.erori.length < 20) L.diag.erori.push('judeca: ' + String(e.message || e).slice(0, 150)); }
+  L.judecari -= 1;
+  if (L.faza !== 'live' || !L.dc || L.dc.readyState !== 'open') return;
+  const dinServer = !!(j && j.ok && typeof j.corect === 'boolean');
+  const b = dinServer
+    ? Object.assign({}, a, { corect: j.corect, varianta_buna: j.corect ? (a.a_spus || j.varianta_buna) : (j.varianta_buna || a.varianta_buna), motiv_ro: j.motiv_ro || '', judecat: 'server' })
+    : Object.assign({}, a, { judecat: 'profesor' });
+  if (L.diag) { L.diag.judecate_server = (L.diag.judecate_server || 0) + (dinServer ? 1 : 0); L.diag.judecate_profesor = (L.diag.judecate_profesor || 0) + (dinServer ? 0 : 1); }
+  const out = notaVerificare(b);
+  if (dinServer && out.ok) { out.verdict = j.corect ? 'correct' : 'not quite'; out.say = j.corect ? 'Correct.' : 'Not quite: ' + b.varianta_buna; }
+  trimiteEveniment({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(out) } });
+  trimiteEveniment({ type: 'response.create' });
+  L.raspunsActiv = true;
 }
 
 /* --- funcțiile apelate de profesor (doar la response.done, ca să nu pornim un răspuns peste altul) */
@@ -1681,10 +1734,12 @@ function laApelFunctie(nume, callId, argumente) {
     iesire = { ok: true, step: L.pas };
     if (L.pas === 5 && L.plan && L.verif && !L.verif.gata) {
       const t = urmatoareaSarcina();
-      if (t) iesire.task = t; // profesorul citește sarcina exactă dată de aplicație, nu una din exerciții
+      if (t) { iesire.task = t; L.verif.intrariLaSarcina = L.intrari || 0; } // sarcina exactă dată de aplicație; se notează abia după ce răspunde Andrei
     }
   } else if (nume === 'verificare') {
-    iesire = notaVerificare(a);
+    const garda = gardaVerificare(a);
+    if (garda) iesire = garda;
+    else { judecaSiRaspunde(a, callId); return false; } // nota o dă examinatorul; răspunsul pleacă după
   } else {
     iesire = { ok: false, error: 'unknown function' };
   }
@@ -1699,7 +1754,7 @@ function laEveniment(ev) {
       if (L.inchidere) anuleazaInchiderea();
       seteazaStare('Te ascult…', 'asculta');
       break;
-    case 'input_audio_buffer.speech_stopped': L.vorbeste = false; seteazaStare('Se gândește…', 'gandeste'); setTimeout(golesteCoadaApp, 400); break;
+    case 'input_audio_buffer.speech_stopped': L.vorbeste = false; L.intrari = (L.intrari || 0) + 1; seteazaStare('Se gândește…', 'gandeste'); setTimeout(golesteCoadaApp, 400); break;
     case 'response.created': L.raspunsActiv = true; seteazaStare(L.mod === 'test' ? 'Examinatorul vorbește' : 'Profesorul vorbește', 'vorbeste'); break;
     case 'output_audio_buffer.started': L.audioProf = true; seteazaStare(L.mod === 'test' ? 'Examinatorul vorbește' : 'Profesorul vorbește', 'vorbeste'); break;
     case 'output_audio_buffer.stopped':
@@ -1715,9 +1770,9 @@ function laEveniment(ev) {
       if (L.diag) L.diag.raspunsuri += 1;
       let continua = false;
       (r.output || []).forEach((o) => { if (o && o.type === 'function_call' && laApelFunctie(o.name, o.call_id, o.arguments)) continua = true; });
-      if (continua) { trimiteEveniment({ type: 'response.create' }); L.raspunsActiv = true; }
+      if (continua && !(L.judecari > 0)) { trimiteEveniment({ type: 'response.create' }); L.raspunsActiv = true; }
       else if (L.asteaptaFinal && r.status === 'completed') { L.asteaptaFinal = false; arataFinalLive(); }
-      if (!L.raspunsActiv && !L.audioProf) seteazaStare(L.mut ? 'Microfonul e oprit' : 'Rândul tău', L.mut ? 'mut' : 'asteapta');
+      if (!L.raspunsActiv && !L.audioProf && !(L.judecari > 0)) seteazaStare(L.mut ? 'Microfonul e oprit' : 'Rândul tău', L.mut ? 'mut' : 'asteapta');
       setTimeout(golesteCoadaApp, 300);
       break;
     }
@@ -1834,6 +1889,7 @@ function trimiteText(text) {
   trimiteEveniment({ type: 'response.create' });
   L.raspunsActiv = true;
   adaugaReplica('eu', text);
+  L.intrari = (L.intrari || 0) + 1;
 }
 function schimbaViteza(d) {
   setari.viteza = Math.round(Math.min(1.3, Math.max(0.7, setari.viteza + d)) * 100) / 100;
