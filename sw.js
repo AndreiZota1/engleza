@@ -1,5 +1,5 @@
 /* Service worker: doar fisierele aplicatiei. Lectia (sunetul) merge direct intre telefon si OpenAI. */
-const VERSIUNE = 'engleza-v12';
+const VERSIUNE = 'engleza-v13';
 const FISIERE = [
   './', 'index.html', 'app.css?v=9', 'app.js?v=9', 'manifest.webmanifest',
   'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png',

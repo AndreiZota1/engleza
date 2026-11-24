@@ -17,8 +17,8 @@ const gol = (x) => x === null || x === undefined || (typeof x === 'number' && is
 
 let cfg = null;
 try { cfg = JSON.parse(localStorage.getItem(CHEIE_CFG) || 'null'); } catch (e) { cfg = null; }
-const VERSIUNE_APP = '1.7';
-let setari = { mod: 'lectie', viteza: 0.95, rabdare: 'low', zgomot: 'auto', ecran: true, subtitrari: false, obiectiv: 30, vorbire: 'buton' };
+const VERSIUNE_APP = '1.8';
+let setari = { mod: 'lectie', viteza: 0.95, rabdare: 'low', zgomot: 'auto', ecran: true, subtitrari: false, obiectiv: 30, vorbire: 'buton', corecturi: true };
 try { Object.assign(setari, JSON.parse(localStorage.getItem(CHEIE_SETARI) || '{}')); } catch (e) { /* implicite */ }
 function salveazaSetari() { try { localStorage.setItem(CHEIE_SETARI, JSON.stringify(setari)); } catch (e) { /* ignor */ } }
 // 1.5: microfonul se alege singur (recunosc căștile); „telefonul pe masă” era doar valoarea implicită veche
@@ -1401,14 +1401,15 @@ const L = {
   ac: null, anMic: null, anProf: null, buf: null, rafId: 0, stare: '',
   plan: null, pas: 0, pasInceput: 0, nudge: {}, verif: null, raspunsActiv: false, audioProf: false, vorbeste: false,
   coadaApp: [], inchidere: null, asteaptaFinal: false, rolNote: 'system', diag: null, zgomot: 'far_field', mic: null,
-  vorbire: 'buton', inreg: null, raspunsDatorat: false,
+  vorbire: 'buton', inreg: null, raspunsDatorat: false, poarta: null, ultimaTranscriere: null,
 };
 const NUME_PAS_SCURT = ['Încălzire', 'Ce înveți', 'Exersezi', 'Situația', 'Verificarea'];
 function secundeLive() { return L.inceput ? Math.round((Date.now() - L.inceput) / 1000) : 0; }
 function diagNou() {
   return { versiune: VERSIUNE_APP, segmente: 0, scurte: 0, lp: [], neclare: 0, nu_am_zis: [], raspunsuri: 0, opriri: 0, vorbiri: 0,
     tokeni: { ain: 0, ain_cache: 0, aout: 0, tin: 0, tin_cache: 0, tout: 0 }, pasi: [], note_app: 0, erori: [],
-    apasari: 0, intreruperi: 0, anulate: 0, prea_scurte: 0, secunde_vorbite: 0, niveluri: [] };
+    apasari: 0, intreruperi: 0, anulate: 0, prea_scurte: 0, secunde_vorbite: 0, niveluri: [],
+    corecturi_verificate: 0, corecturi_reale: 0, fara_transcriere: 0, poarta_ms: [], a_spus_transcriere: 0 };
 }
 function ecranLive() {
   const examen = L.mod === 'test', cuButon = L.vorbire === 'buton';
@@ -1662,7 +1663,7 @@ function anuleazaInchiderea() {
 /* --- 1.7 (24.11): vorbești cu butonul. Pe căști, profesorul decidea singur când ai terminat și te tăia la jumătatea
    propoziției. Acum apeși, spui tot ce vrei, apeși din nou și abia atunci pleacă replica. Între apăsări microfonul e oprit. */
 function ceRaspuns() { // răspunsul profesorului: acum sau imediat ce se poate (nu peste vorbitul tău și nu peste alt răspuns)
-  if (L.inreg || L.raspunsActiv || L.judecari > 0 || !L.dc || L.dc.readyState !== 'open') { L.raspunsDatorat = true; return; }
+  if (L.inreg || L.poarta || L.raspunsActiv || L.judecari > 0 || !L.dc || L.dc.readyState !== 'open') { L.raspunsDatorat = true; return; }
   L.raspunsDatorat = false;
   trimiteEveniment({ type: 'response.create' });
   L.raspunsActiv = true;
@@ -1725,7 +1726,7 @@ function trimiteVorbitul() {
       }
       seteazaStare('Se gândește…', 'gandeste');
       deseneazaButonVorbit();
-      ceRaspuns();
+      pornestePoarta(); // 1.8: întâi transcrierea și examinatorul, apoi profesorul
     }, 250);
   }, 300);
 }
@@ -1762,13 +1763,93 @@ function deseneazaButonVorbit() {
   if (inreg) { const t = b.querySelector('.vorbit-text'); if (t) t.textContent = 'Gata, trimite · ' + durata((Date.now() - r.start) / 1000); }
 }
 
+/* --- 1.8 (24.11): corecturile le decide examinatorul de pe Mac, din transcriere, nu profesorul din auz. Pe căști (sunet de apel)
+   profesorul auzea greșit și „corecta” lucruri spuse bine; la 19:15 a „corectat” și o propoziție corectă, ca s-o aducă la exemplul
+   lecției. După ce trimiți, aplicația așteaptă transcrierea (gpt-4o-transcribe), o dă examinatorului și abia apoi răspunde profesorul. */
+function pornestePoarta() {
+  if (L.mod === 'test' || setari.corecturi === false) { ceRaspuns(); return; }
+  const p = { start: Date.now(), itemId: null, text: null, marcat: null, inLucru: false, ceas: null };
+  L.poarta = p;
+  p.ceas = setTimeout(() => { if (L.diag) L.diag.fara_transcriere += 1; continuaPoarta(p); }, 3000); // fără transcriere în 3 s: merge mai departe
+}
+function laTranscriere(ev) {
+  const text = String((ev && ev.transcript) || '').trim();
+  if (L.vorbire === 'buton' && text) L.ultimaTranscriere = { text, t: Date.now() };
+  const p = L.poarta;
+  if (!p || p.text !== null || p.inLucru) return;
+  if (p.itemId && ev.item_id && ev.item_id !== p.itemId) return;
+  p.text = text;
+  p.marcat = textCuNeclare(ev) || text;
+  continuaPoarta(p);
+}
+function textCuNeclare(ev) { // cuvintele prinse nesigur (sub 30%) primesc [?]: nici examinatorul, nici profesorul nu le corectează
+  const l = ev && Array.isArray(ev.logprobs) ? ev.logprobs : [];
+  if (!l.length) return null;
+  const cuv = [];
+  l.forEach((x) => {
+    const tok = String((x && x.token) || '');
+    const lp = x && typeof x.logprob === 'number' ? x.logprob : 0;
+    if (!cuv.length || /^\s/.test(tok)) cuv.push({ t: tok.trim(), lp });
+    else { const c = cuv[cuv.length - 1]; c.t += tok; c.lp = Math.min(c.lp, lp); }
+  });
+  return cuv.filter((c) => c.t).map((c) => c.t + (/[A-Za-z]/.test(c.t) && Math.exp(c.lp) < 0.3 ? ' [?]' : '')).join(' ');
+}
+function ultimaReplicaProfesor() {
+  for (let i = L.transcript.length - 1; i >= 0; i--) if (L.transcript[i].de === 'profesor') return L.transcript[i].text.slice(0, 300);
+  return '';
+}
+function asemanare(x, y) { // cât de mult seamănă două propoziții (cuvinte comune / toate cuvintele)
+  const w = (s) => new Set(String(s || '').toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').split(/\s+/).filter(Boolean));
+  const a = w(x), b = w(y);
+  if (!a.size || !b.size) return 0;
+  let c = 0;
+  a.forEach((t) => { if (b.has(t)) c += 1; });
+  return c / (a.size + b.size - c);
+}
+async function continuaPoarta(p) {
+  if (L.poarta !== p || p.inLucru) return;
+  p.inLucru = true;
+  clearTimeout(p.ceas);
+  const text = p.marcat || p.text || '';
+  const cuvinte = (text.replace(/\[\?\]/g, '').match(/[A-Za-z']+/g) || []).length;
+  const neclar = /\[\?\]/.test(text) ? ' Words marked [?] were not heard clearly: never correct them and do not ask him to repeat because of them; understand the sentence as well as you can.' : '';
+  let nota = null;
+  if (text && L.pas === 5 && L.plan) {
+    nota = 'Speech recognition heard his answer as: «' + text + '». Judge this text, not your own hearing.' + neclar;
+  } else if (text && cuvinte >= 3) {
+    let v = null;
+    try {
+      v = await Promise.race([
+        api('/api/engleza/corecteaza', { method: 'POST', body: { lectie: L.lectie || undefined, text, intrebare: ultimaReplicaProfesor() } }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('examinatorul n-a răspuns în 3,5 s')), 3500)),
+      ]);
+    } catch (e) { if (L.diag && L.diag.erori.length < 20) L.diag.erori.push('corecteaza: ' + String(e.message || e).slice(0, 150)); }
+    if (v && v.ok) {
+      if (L.diag) { L.diag.corecturi_verificate += 1; if (v.greseala) L.diag.corecturi_reale += 1; }
+      nota = v.greseala
+        ? 'Speech recognition heard: «' + text + '». The examiner found one real mistake: "' + v.gresit + '" should be "' + v.corect + '"' + (v.propozitia ? ' (his sentence fixed: "' + v.propozitia + '")' : '') + '. Correct only this, briefly, then go on. Do not correct anything else.'
+        : 'Speech recognition heard: «' + text + '». The examiner checked it: no real mistake. Do NOT correct anything and do not offer a better or more natural version, not even the example sentence of the lesson. Respond to what he said.';
+    } else {
+      nota = 'Speech recognition heard: «' + text + '». Correct only a real mistake you can see in this text; if it is correct English, do not correct anything.';
+    }
+    nota += neclar;
+  }
+  if (L.poarta !== p) return; // legătura a căzut sau lecția s-a oprit între timp
+  L.poarta = null;
+  if (L.diag && L.diag.poarta_ms.length < 40) L.diag.poarta_ms.push(Date.now() - p.start);
+  if (L.faza !== 'live') return;
+  if (nota) trimiteEveniment({ type: 'conversation.item.create', item: { type: 'message', role: L.rolNote, content: [{ type: 'input_text', text: '[APP] ' + nota }] } });
+  ceRaspuns();
+}
+function renuntaLaPoarta() { if (L.poarta) { clearTimeout(L.poarta.ceas); L.poarta = null; } }
+
 /* --- notele aplicației către profesor, „Nu asta am zis”, oprirea profesorului */
 function notaApp(text) {
   L.coadaApp.push(text);
   golesteCoadaApp();
 }
 function golesteCoadaApp() {
-  if (!L.coadaApp.length || L.raspunsActiv || L.audioProf || L.vorbeste || L.judecari > 0 || !L.dc || L.dc.readyState !== 'open') return;
+  if (!L.coadaApp.length || L.raspunsActiv || L.audioProf || L.vorbeste || L.poarta || L.judecari > 0 || !L.dc || L.dc.readyState !== 'open') return;
   const text = L.coadaApp.shift();
   trimiteEveniment({ type: 'conversation.item.create', item: { type: 'message', role: L.rolNote, content: [{ type: 'input_text', text: '[APP] ' + text }] } });
   trimiteEveniment({ type: 'response.create' });
@@ -1806,6 +1887,11 @@ function nuAstaAmZis() {
 async function judecaSiRaspunde(a, callId) {
   L.judecari = (L.judecari || 0) + 1;
   seteazaStare('Verific răspunsul…', 'gandeste');
+  const tr = L.vorbire === 'buton' && L.ultimaTranscriere && Date.now() - L.ultimaTranscriere.t < 180000 ? L.ultimaTranscriere.text : '';
+  if (tr && asemanare(tr, a.a_spus) >= 0.4) { // 1.8: transcrierea e mai sigură decât urechea profesorului
+    a = Object.assign({}, a, { a_spus: tr, a_spus_profesor: a.a_spus });
+    if (L.diag) L.diag.a_spus_transcriere += 1;
+  }
   let j = null;
   try {
     j = await Promise.race([
@@ -1881,11 +1967,13 @@ function laEveniment(ev) {
       (r.output || []).forEach((o) => { if (o && o.type === 'function_call' && o.status !== 'incomplete' && laApelFunctie(o.name, o.call_id, o.arguments)) continua = true; });
       if (continua || L.raspunsDatorat) ceRaspuns();
       else if (L.asteaptaFinal && r.status === 'completed') { L.asteaptaFinal = false; arataFinalLive(); }
-      if (!L.raspunsActiv && !L.audioProf && !(L.judecari > 0) && !L.inreg) seteazaStare(L.mut ? 'Microfonul e oprit' : 'Rândul tău', L.mut ? 'mut' : 'asteapta');
+      if (!L.raspunsActiv && !L.audioProf && !(L.judecari > 0) && !L.inreg && !L.poarta) seteazaStare(L.mut ? 'Microfonul e oprit' : 'Rândul tău', L.mut ? 'mut' : 'asteapta');
       setTimeout(golesteCoadaApp, 300);
       break;
     }
-    case 'conversation.item.input_audio_transcription.completed': adaugaReplica('eu', ev.transcript, lpMedie(ev)); break;
+    case 'conversation.item.input_audio_transcription.completed': adaugaReplica('eu', ev.transcript, lpMedie(ev)); laTranscriere(ev); break;
+    case 'conversation.item.input_audio_transcription.failed': if (L.poarta && L.poarta.text === null) { L.poarta.text = ''; continuaPoarta(L.poarta); } break;
+    case 'input_audio_buffer.committed': if (L.poarta && !L.poarta.itemId) L.poarta.itemId = ev.item_id || null; break;
     case 'response.output_audio_transcript.done': adaugaReplica('profesor', ev.transcript); break;
     case 'error': {
       const m = (ev.error && ev.error.message) || 'eroare';
@@ -1982,7 +2070,7 @@ async function reconecteaza() {
     if (L.reconectari >= 4) { toast('Legătura a căzut de prea multe ori. Salvez sesiunea.', true); reconectareInCurs = false; await terminaLectia(true); return; }
     L.reconectari += 1;
     L.raspunsActiv = false; L.audioProf = false; L.vorbeste = false; L.raspunsDatorat = false;
-    abandoneazaVorbitul();
+    abandoneazaVorbitul(); renuntaLaPoarta();
     seteazaStare('Reconectez…', 'gandeste');
     try { if (L.pc) L.pc.close(); } catch (e) { /* ignor */ }
     L.pc = null; L.dc = null;
@@ -2045,7 +2133,7 @@ async function pornesteLectia(opt) {
     lectie: (opt && opt.lectie) || null, lectieTitlu: (opt && opt.titlu) || null,
     plan: null, pas: 0, pasInceput: 0, nudge: {}, verif: null, raspunsActiv: false, audioProf: false, vorbeste: false,
     coadaApp: [], inchidere: null, asteaptaFinal: false, rolNote: 'system', diag: diagNou(), mic: null,
-    vorbire: setari.vorbire === 'automat' ? 'automat' : 'buton', inreg: null, raspunsDatorat: false });
+    vorbire: setari.vorbire === 'automat' ? 'automat' : 'buton', inreg: null, raspunsDatorat: false, poarta: null, ultimaTranscriere: null });
   location.hash = '#/live';
   document.body.classList.add('in-lectie');
   ecranLive();
@@ -2087,6 +2175,7 @@ async function pornesteLectia(opt) {
 }
 function oprireTehnica() {
   if (L.inreg) { clearInterval(L.inreg.ceas); L.inreg = null; }
+  renuntaLaPoarta();
   try { if (L.pc) L.pc.close(); } catch (e) { /* ignor */ }
   if (L.flux) L.flux.getTracks().forEach((t) => t.stop());
   L.pc = null; L.dc = null; L.flux = null; L.anMic = null; L.anProf = null;
@@ -2271,6 +2360,7 @@ function foaieSetari() {
     '<label class="setare"><span>Obiectivul zilnic</span><select id="obiectiv">' + [15, 30, 45, 60, 90, 120].map((m) => '<option value="' + m + '"' + (setari.obiectiv === m ? ' selected' : '') + '>' + m + ' minute pe zi</option>').join('') + '</select></label>' +
     '<label class="setare"><span>Viteza profesorului <b id="viteza-val">' + setari.viteza.toFixed(2) + '×</b></span><input type="range" id="viteza" min="0.8" max="1.2" step="0.05" value="' + setari.viteza + '"></label>' +
     '<label class="setare"><span>Cum vorbești cu profesorul</span><select id="vorbire"><option value="buton"' + (setari.vorbire !== 'automat' ? ' selected' : '') + '>cu butonul (recomandat)</option><option value="automat"' + (setari.vorbire === 'automat' ? ' selected' : '') + '>automat: te ascultă tot timpul</option></select></label>' +
+    '<label class="setare comutator"><input type="checkbox" id="corecturi"' + (setari.corecturi !== false ? ' checked' : '') + '><span>Corecturile le verifică examinatorul (mai sigur; cu butonul, profesorul răspunde cu ~2 s mai târziu)</span></label>' +
     '<label class="setare"><span>Doar în modul automat: te așteaptă când faci pauze</span><select id="rabdare"><option value="low"' + (setari.rabdare === 'low' ? ' selected' : '') + '>mult (recomandat)</option><option value="medium"' + (setari.rabdare === 'medium' ? ' selected' : '') + '>normal</option></select></label>' +
     '<label class="setare"><span>Microfonul</span><select id="zgomot"><option value="auto"' + (setari.zgomot === 'auto' ? ' selected' : '') + '>automat: recunosc căștile (recomandat)</option><option value="near_field"' + (setari.zgomot === 'near_field' ? ' selected' : '') + '>căști cu microfon</option><option value="far_field"' + (setari.zgomot === 'far_field' ? ' selected' : '') + '>telefonul în suport sau pe masă</option></select></label>' +
     '<div class="setare"><span>Te aude bine?</span><small class="mic">Citești o propoziție și vezi cât de clar te prinde, cu căștile și fără.</small><button class="buton mic-b" id="test-mic">' + ICON.mic + ' Testează microfonul</button></div>' +
@@ -2288,6 +2378,7 @@ function foaieSetari() {
     $('#viteza').oninput = (e) => { setari.viteza = Number(e.target.value); $('#viteza-val').textContent = setari.viteza.toFixed(2) + '×'; salveazaSetari(); };
     $('#rabdare').onchange = (e) => { setari.rabdare = e.target.value; salveazaSetari(); };
     $('#vorbire').onchange = (e) => { setari.vorbire = e.target.value; salveazaSetari(); };
+    $('#corecturi').onchange = (e) => { setari.corecturi = e.target.checked; salveazaSetari(); };
     $('#zgomot').onchange = (e) => { setari.zgomot = e.target.value; salveazaSetari(); };
     $('#test-mic').onclick = () => { inchideStrat(); setTimeout(foaieTestMicrofon, 30); };
     $('#parere').onclick = () => { inchideStrat(); setTimeout(foaieFeedback, 30); };
