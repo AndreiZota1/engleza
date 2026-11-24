@@ -1,4 +1,5 @@
-/* English v2 (23.11.2026): lecții vorbite, conversație scrisă, parcurs pe 20 de săptămâni, teste, cartonașe, progres.
+/* English 1.5 (24.11.2026): lecții cu pași și verificare finală, nivel evaluat strict, microfon automat, părerea ta, diagnostic.
+   English v2 (23.11.2026): lecții vorbite, conversație scrisă, parcurs pe 20 de săptămâni, teste, cartonașe, progres.
    Sunetul lecțiilor merge direct între telefon și OpenAI (WebRTC). Mac-ul dă cheia temporară, instrucțiunile,
    memoria, testele și statisticile; cheia OpenAI adevărată nu ajunge niciodată aici. */
 'use strict';
@@ -16,9 +17,12 @@ const gol = (x) => x === null || x === undefined || (typeof x === 'number' && is
 
 let cfg = null;
 try { cfg = JSON.parse(localStorage.getItem(CHEIE_CFG) || 'null'); } catch (e) { cfg = null; }
-let setari = { mod: 'lectie', viteza: 0.95, rabdare: 'low', zgomot: 'far_field', ecran: true, subtitrari: false, obiectiv: 30 };
+const VERSIUNE_APP = '1.5';
+let setari = { mod: 'lectie', viteza: 0.95, rabdare: 'low', zgomot: 'auto', ecran: true, subtitrari: false, obiectiv: 30 };
 try { Object.assign(setari, JSON.parse(localStorage.getItem(CHEIE_SETARI) || '{}')); } catch (e) { /* implicite */ }
 function salveazaSetari() { try { localStorage.setItem(CHEIE_SETARI, JSON.stringify(setari)); } catch (e) { /* ignor */ } }
+// 1.5: microfonul se alege singur (recunosc căștile); „telefonul pe masă” era doar valoarea implicită veche
+if (!setari.v15) { setari.zgomot = 'auto'; setari.v15 = true; salveazaSetari(); }
 
 const S = { stare: null, progres: null, parcurs: null, lectii: {}, randare: 0, drum: '' };
 let PRET = { audio_in: 10, audio_in_cache: 0.3, audio_out: 20, text_in: 0.6, text_in_cache: 0.06, text_out: 2.4 };
@@ -270,9 +274,15 @@ function nivelCurs(n) {
   return (v && v[1]) || (w && w[1]) || (/[ABC][12]\+?/.exec(n || '') || [''])[0];
 }
 function facute(n) { return (n || 0) + ((n || 0) === 1 ? ' făcută' : ' făcute'); }
-function pragLectie() { const c = (S.stare && S.stare.curriculum) || {}; return { min: c.prag_minute || 10, mes: c.prag_mesaje || 8 }; }
+function pragLectie() { const c = (S.stare && S.stare.curriculum) || {}; return { min: c.prag_minute || 10, mes: c.prag_mesaje || 8, verif: c.prag_verificare || 4 }; }
 function progresLectie(l) {
   const p = pragLectie();
+  if (l.are_verificare) {
+    if (l.facuta) return 'trecută' + (l.verif_total ? ': ' + l.verif_corecte + ' din ' + l.verif_total + ' la verificare' : '');
+    if (l.verif_total) return l.verif_corecte + ' din ' + l.verif_total + ' la verificare · îți trebuie ' + p.verif;
+    if (l.minute || l.mesaje) return 'începută · se bifează când treci verificarea finală';
+    return '15–20 de minute · se bifează când treci verificarea finală (' + p.verif + ' din 5)';
+  }
   if (l.facuta) return 'făcută';
   if (l.minute) return l.minute + ' din ' + p.min + ' minute';
   if (l.mesaje) return l.mesaje + ' din ' + p.mes + ' mesaje scrise';
@@ -309,14 +319,14 @@ function cardLectiaDeAzi(s) {
       '<p class="text-2">Fă testul vorbit ca să vezi unde ai ajuns. Din Setări îți poți reface lecțiile pe noul nivel.</p></section>';
   }
   const p = pragLectie();
-  const procent = Math.min(1, Math.max((l.minute || 0) / p.min, (l.mesaje || 0) / p.mes));
+  const procent = l.are_verificare ? (l.verif_total ? Math.min(1, l.verif_corecte / Math.max(1, p.verif)) : 0) : Math.min(1, Math.max((l.minute || 0) / p.min, (l.mesaje || 0) / p.mes));
   const vocab = (l.vocabular || []).slice(0, 6);
   return '<section class="card lectia-azi"><div class="rand"><span class="eticheta">Lecția de azi · unitatea ' + l.unitate + ' · ' + l.index + ' din 5</span>' +
     '<span class="lectia-nr">' + nrLectie(l) + '<small> din ' + (c.total || 100) + '</small></span></div>' +
     '<h2>' + esc(l.titlu) + '</h2><p class="obiectiv">' + esc(l.obiectiv) + '</p>' +
     (l.gramatica ? '<p class="gram">' + esc(l.gramatica) + '</p>' : '') +
     (vocab.length ? '<div class="chips">' + vocab.map((v) => '<span class="chip">' + esc(v) + '</span>').join('') + '</div>' : '') +
-    (procent > 0 ? '<div class="lectie-bara"><span data-w="' + Math.round(procent * 100) + '"></span></div><p class="mic">' + esc(progresLectie(l)) + ' · se bifează la ' + p.min + ' minute de vorbit</p>' : '') +
+    (procent > 0 ? '<div class="lectie-bara"><span data-w="' + Math.round(procent * 100) + '"></span></div>' : '') + '<p class="mic">' + esc(progresLectie(l)) + (l.are_verificare || procent === 0 ? '' : ' · se bifează la ' + p.min + ' minute de vorbit') + '</p>' +
     '<div class="butoane"><button class="buton principal" id="lectia-start">' + ICON.mic + ' Începe lecția</button><button class="buton" id="lectia-detalii">' + ICON.carte + ' Ce înveți</button></div>' +
     '<p class="mic centru contor-lectii">' + (c.facute || 0) + ' din ' + deLectii(c.total || 100) + ' ' + ((c.facute || 0) === 1 ? 'făcută' : 'făcute') + '</p></section>';
 }
@@ -344,23 +354,34 @@ function legaLectiaDeAzi(s) {
 function foaieLectie(l) {
   if (!l) return;
   const c = (S.stare && S.stare.curriculum) || {};
+  const p = pragLectie();
+  const pasi = c.pasi || [{ nume: 'Încălzire', minute: 2 }, { nume: 'Ce înveți', minute: 3 }, { nume: 'Exersezi', minute: 5 }, { nume: 'Situația reală', minute: 5 }, { nume: 'Verificarea', minute: 3 }];
+  const desc = [l.incalzire, l.gramatica, (l.exercitii || []).length ? l.exercitii.length + ' exerciții scurte, pe rând' : '', l.situatie || l.sarcina,
+    (l.verificare || []).length + ' sarcini, fără ajutor; treci cu ' + p.verif];
   strat('<span class="eticheta">Unitatea ' + l.unitate + ' · lecția ' + l.index + ' din 5 · ' + nrLectie(l) + ' din ' + (c.total || 100) + '</span>' +
     '<h2>' + esc(l.titlu) + '</h2>' +
-    (l.facuta ? '<p class="bine stare-lectie">' + ICON.bifa + ' Făcută. O poți relua oricând.</p>' : (l.minute || l.mesaje ? '<p class="mic">' + esc(progresLectie(l)) + '</p>' : '')) +
+    (l.facuta ? '<p class="bine stare-lectie">' + ICON.bifa + ' ' + esc(progresLectie(l)) + '. O poți relua oricând.</p>' : (l.minute || l.mesaje || l.verif_total ? '<p class="mic">' + esc(progresLectie(l)) + '</p>' : '')) +
     '<p class="obiectiv">' + esc(l.obiectiv) + '</p>' +
-    (l.gramatica ? '<h3 class="sub-foaie">Ce exersezi</h3><p class="text-2">' + esc(l.gramatica) + '</p>' : '') +
-    (l.sarcina ? '<h3 class="sub-foaie">Ce faci în lecție</h3><p class="text-2">' + esc(l.sarcina) + '</p>' : '') +
+    (l.gramatica ? '<h3 class="sub-foaie">Ce înveți</h3><p class="text-2">' + esc(l.gramatica) + '</p>' + (l.explicatie_ro ? '<p>' + esc(l.explicatie_ro) + '</p>' : '') : '') +
+    ((l.exemple || []).length ? '<ul class="fraze-lectie">' + l.exemple.map((f, i) => '<li><span>' + esc(f) + '</span><button class="buton-rotund mic" data-exemplu="' + i + '" aria-label="Ascultă exemplul">' + ICON.difuzor + '</button></li>').join('') + '</ul>' : '') +
+    (l.are_verificare ? '<h3 class="sub-foaie">Cum decurge</h3><ol class="pasi-foaie">' + pasi.map((x, i) => '<li><b>' + esc(x.nume) + '</b> <span class="mic">' + x.minute + ' min</span>' + (desc[i] ? '<small>' + esc(desc[i]) + '</small>' : '') + '</li>').join('') + '</ol>'
+      : (l.sarcina ? '<h3 class="sub-foaie">Ce faci în lecție</h3><p class="text-2">' + esc(l.sarcina) + '</p>' : '')) +
     ((l.vocabular || []).length ? '<h3 class="sub-foaie">Cuvinte</h3><div class="chips">' + l.vocabular.map((v) => '<span class="chip">' + esc(v) + '</span>').join('') + '</div>' : '') +
     ((l.fraze || []).length ? '<h3 class="sub-foaie">Fraze</h3><ul class="fraze-lectie">' + l.fraze.map((f, i) => '<li><span>' + esc(f) + '</span><button class="buton-rotund mic" data-fraza="' + i + '" aria-label="Ascultă fraza">' + ICON.difuzor + '</button></li>').join('') + '</ul>' : '') +
-    '<div class="butoane-col"><button class="buton principal" id="fl-vorbit">' + ICON.mic + ' Lecția vorbită (15–20 min)</button><button class="buton" id="fl-scris">' + ICON.creion + ' Fă-o în scris</button></div>',
+    (l.are_verificare ? '<h3 class="sub-foaie">Verificarea finală · minim ' + p.verif + ' din ' + l.verificare.length + '</h3><ol class="verif-foaie">' + l.verificare.map((z) => '<li>' + esc(z.ro || z.cerinta) + '</li>').join('') + '</ol>' : '') +
+    '<div class="butoane-col"><button class="buton principal" id="fl-vorbit">' + ICON.mic + ' Lecția vorbită (15–20 min)</button>' +
+    (l.are_verificare ? '<button class="buton" id="fl-verif">' + ICON.fulger + ' Doar verificarea (2 min)</button>' : '') +
+    '<button class="buton" id="fl-scris">' + ICON.creion + ' Fă-o în scris</button></div>',
   () => {
     $('#fl-vorbit').onclick = () => { inchideStrat(); pornesteLectia({ mod: 'lectie', lectie: l.id, titlu: l.titlu }); };
+    const fv = $('#fl-verif'); if (fv) fv.onclick = () => { inchideStrat(); location.hash = '#/test/verificare-' + l.id; };
     $('#fl-scris').onclick = () => {
       inchideStrat();
       try { sessionStorage.setItem('engleza.scris.lectie', JSON.stringify({ id: l.id, titlu: l.titlu })); } catch (e) { /* ignor */ }
       if (ruta().v === 'scris') randeaza(); else location.hash = '#/scris';
     };
     $$('[data-fraza]').forEach((b) => { b.onclick = () => reda(l.fraze[Number(b.dataset.fraza)], b); });
+    $$('[data-exemplu]').forEach((b) => { b.onclick = () => reda(l.exemple[Number(b.dataset.exemplu)], b); });
   });
   const st = $('#strat');
   const vechi = st.onclick;
@@ -387,7 +408,7 @@ function legaGrilaLectii(cur) {
 function cardNivelDeInceput() {
   return '<section class="card inceput"><span class="eticheta">Primul pas</span><h2>Află-ți nivelul</h2>' +
     '<p class="text-2">Programul tău a pornit azi. Începe cu testul de nivel: după el îți construiesc 100 de lecții pe nivelul tău, câte 5 pe fiecare din cele 20 de unități.</p>' +
-    '<a class="pas" href="#/test/nivel"><b>1</b><span><strong>Test scris</strong>20 de întrebări, de la A1 la C1 · cam 8 minute</span></a>' +
+    '<a class="pas" href="#/test/nivel"><b>1</b><span><strong>Test scris</strong>24 de întrebări, de la A2 la C1 · cam 10 minute</span></a>' +
     '<button class="pas" id="pas-vorbit"><b>2</b><span><strong>Test vorbit</strong>10 minute cu examinatorul · fluență, gramatică, vocabular, pronunție</span></button></section>';
 }
 
@@ -418,6 +439,122 @@ const Mic = {
     });
   },
 };
+
+/* ------------------------------------------------------------ microfonul, părerea ta, evaluarea vorbită (1.5) */
+function infoMicrofon(flux) {
+  const t = flux && flux.getAudioTracks()[0];
+  let st = {};
+  try { st = (t && t.getSettings && t.getSettings()) || {}; } catch (e) { st = {}; }
+  let nativ = null;
+  try { if (window.Aplicatie && window.Aplicatie.audio) nativ = JSON.parse(window.Aplicatie.audio()); } catch (e) { nativ = null; }
+  const eticheta = (t && t.label) || '';
+  const casti = /bluetooth|headset|hands-?free|buds|airpods|baseus|\bsco\b|earphone|wired|căști/i.test(eticheta) || !!(nativ && (nativ.bt || nativ.fir));
+  return { eticheta: eticheta.slice(0, 120), casti, rata: st.sampleRate || null, canale: st.channelCount || null,
+    ec: st.echoCancellation, ns: st.noiseSuppression, agc: st.autoGainControl, nativ };
+}
+const ETICHETE_FEEDBACK = ['M-a auzit greșit', 'M-a corectat aiurea', 'Prea multe repetări', 'Prea ușor', 'Prea greu', 'Prea lung', 'A vorbit prea mult', 'A mers bine'];
+function blocFeedback(titluF) {
+  return '<section class="card feedback-bloc"><h3>' + esc(titluF || 'Cum a fost?') + '</h3><p class="mic">Alege ce se potrivește. Le citesc și repar aplicația pe baza lor.</p>' +
+    '<div class="chips alege">' + ETICHETE_FEEDBACK.map((e) => '<button class="chip" data-fb="' + esc(e) + '">' + esc(e) + '</button>').join('') + '</div>' +
+    '<textarea id="fb-text" rows="2" placeholder="Altceva? (opțional; poți dicta cu tastatura)"></textarea><button class="buton lat" id="fb-trimite" disabled>Trimite</button></section>';
+}
+function legaFeedback(context) {
+  const tr = $('#fb-trimite');
+  if (!tr) return;
+  const ales = new Set();
+  const act = () => { tr.disabled = !ales.size && !$('#fb-text').value.trim(); };
+  $$('[data-fb]').forEach((b) => { b.onclick = () => { const e = b.dataset.fb; if (ales.has(e)) ales.delete(e); else ales.add(e); b.classList.toggle('ales', ales.has(e)); act(); }; });
+  $('#fb-text').oninput = act;
+  tr.onclick = async () => {
+    tr.disabled = true; tr.textContent = 'Trimit…';
+    const c = typeof context === 'function' ? context() : (context || {});
+    try {
+      await api('/api/engleza/feedback', { method: 'POST', body: Object.assign({ etichete: [...ales], text: $('#fb-text').value.trim(),
+        nota: ales.has('A mers bine') && ales.size === 1 ? 1 : (ales.size || $('#fb-text').value.trim() ? -1 : 0), versiune: VERSIUNE_APP, ecran: ruta().v }, c) });
+      const s = tr.closest('.feedback-bloc'); if (s) s.innerHTML = '<p class="bine">' + ICON.bifa + ' Mulțumesc! Le citesc și repar.</p>';
+    } catch (e) {
+      tr.disabled = false; tr.textContent = 'Trimite';
+      if (e instanceof EroareAuth) return ecranNeautorizat();
+      toast(e.message, true);
+    }
+  };
+}
+function foaieFeedback() {
+  strat('<h2>Spune-mi ce să îmbunătățesc</h2><p class="text-2">Orice: ce nu merge, ce te enervează, ce ți-ar plăcea. Fiecare părere ajunge pe Mac, cu ecranul și versiunea, iar eu o citesc înainte să lucrez la aplicație.</p>' +
+    blocFeedback('Ce s-a întâmplat?') + '<button class="buton lat" id="fb-inchide">Închide</button>', () => {
+    legaFeedback({ ecran: 'setari' });
+    $('#fb-inchide').onclick = inchideStrat;
+  });
+}
+const PROPOZITIE_MIC = "I'm walking to the office and checking the results of our campaigns.";
+function cuvinteMic(t) { return String(t || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean); }
+function potrivireMic(asteptat, auzit) {
+  const a = cuvinteMic(asteptat), b = cuvinteMic(auzit);
+  const d = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = a[i - 1] === b[j - 1] ? d[i - 1][j - 1] + 1 : Math.max(d[i - 1][j], d[i][j - 1]);
+  const prinse = new Set();
+  for (let i = a.length, j = b.length; i > 0 && j > 0;) {
+    if (a[i - 1] === b[j - 1]) { prinse.add(i - 1); i--; j--; } else if (d[i - 1][j] >= d[i][j - 1]) i--; else j--;
+  }
+  const orig = String(asteptat || '').split(/\s+/).filter(Boolean);
+  return { scor: a.length ? Math.round(100 * d[a.length][b.length] / Math.max(a.length, b.length)) : 0,
+    cuvinte: a.map((w, i) => ({ w: orig.length === a.length ? orig[i] : w, ok: prinse.has(i) })) };
+}
+function foaieTestMicrofon() {
+  strat('<h2>Testul de microfon</h2><p class="text-2">Pune căștile cum le porți de obicei (sau ține telefonul cum îl ții în lecție) și citește normal, cu voce tare:</p>' +
+    '<p class="propozitie">„' + esc(PROPOZITIE_MIC) + '”</p><button class="mic-mare" id="tm-start">' + ICON.mic + '<span>Apasă și citește</span></button>' +
+    '<div id="tm-rez" class="tm-rez"></div><button class="buton lat" id="tm-inchide">Închide</button>', () => {
+    const b = $('#tm-start');
+    let inreg = false, maxim = 0, timer = 0, ac = null, info = null;
+    $('#tm-inchide').onclick = () => { clearInterval(timer); if (inreg) Mic.opreste(); inchideStrat(); };
+    b.onclick = async () => {
+      if (!inreg) {
+        try { await Mic.porneste(); } catch (e) { toast(mesajMicrofon(e), true); return; }
+        info = infoMicrofon(Mic.flux);
+        maxim = 0;
+        try {
+          ac = new (window.AudioContext || window.webkitAudioContext)();
+          const an = ac.createAnalyser(); an.fftSize = 1024; ac.createMediaStreamSource(Mic.flux).connect(an);
+          const buf = new Uint8Array(an.fftSize);
+          timer = setInterval(() => { an.getByteTimeDomainData(buf); let s = 0; for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; s += v * v; } maxim = Math.max(maxim, Math.sqrt(s / buf.length)); }, 100);
+        } catch (e) { ac = null; }
+        inreg = true; b.classList.add('inregistreaza'); b.querySelector('span').textContent = 'Te ascult… apasă când termini';
+        return;
+      }
+      inreg = false; clearInterval(timer); if (ac) ac.close().catch(() => {});
+      b.classList.remove('inregistreaza'); b.disabled = true; b.querySelector('span').textContent = 'Verific…';
+      try {
+        const blob = await Mic.opreste();
+        const auzit = blob ? await apiTranscrieEngleza(blob) : '';
+        const p = potrivireMic(PROPOZITIE_MIC, auzit);
+        const volum = maxim < 0.02 ? 'foarte încet' : maxim < 0.06 ? 'încet' : maxim > 0.6 ? 'prea tare, distorsionat' : 'bun';
+        const verdict = p.scor >= 90 ? 'Te aude clar.' : p.scor >= 70 ? 'Te aude, dar pierde cuvinte.' : 'Te aude prost.';
+        const sfat = p.scor >= 90 ? 'Microfonul e în regulă: dacă profesorul tot greșește, apasă „Nu asta am zis” în lecție.'
+          : (info && info.casti ? 'Fă testul încă o dată fără căștile Bluetooth (cu microfonul telefonului, ținut la 20–30 cm de gură) și compară scorurile. Căștile ieftine trimit în apeluri un sunet mai slab decât la muzică.'
+            : 'Ține telefonul mai aproape de gură sau încearcă cu căștile cu fir; în mașină, telefonul în suport, nu în buzunar.');
+        $('#tm-rez').innerHTML = '<div class="tm-scor ' + (p.scor >= 90 ? 'bine' : p.scor >= 70 ? '' : 'rau') + '"><b>' + p.scor + '%</b><span>' + verdict + '</span></div>' +
+          '<p class="tm-cuvinte">' + p.cuvinte.map((c) => '<span class="' + (c.ok ? '' : 'lipsa') + '">' + esc(c.w) + '</span>').join(' ') + '</p>' +
+          '<p class="mic">Am auzit: „' + esc(auzit || '…') + '”</p><p class="mic">Volum: ' + volum + (info && info.eticheta ? ' · ' + esc(info.eticheta) : '') + (info && info.casti ? ' · căști' : '') + '</p><p class="text-2">' + esc(sfat) + '</p>';
+        api('/api/engleza/feedback', { method: 'POST', body: { ecran: 'test_microfon', versiune: VERSIUNE_APP, etichete: ['test_microfon'],
+          date: { scor: p.scor, auzit: auzit.slice(0, 300), volum: Math.round(maxim * 1000) / 1000, microfon: info } } }).catch(() => {});
+      } catch (e) {
+        if (e instanceof EroareAuth) return ecranNeautorizat();
+        toast(e.message, true);
+      }
+      b.disabled = false; b.querySelector('span').textContent = 'Mai încearcă o dată';
+    };
+  });
+}
+function blocEvaluare(ev) {
+  const nume = { gramatica: 'Gramatică', vocabular: 'Vocabular', fluenta: 'Fluență', coerenta: 'Coerență', interactiune: 'Conversație' };
+  const cr = ev.criterii || {};
+  return '<div class="evaluare"><p class="text-2">Evaluat strict, pe tot ce ai spus în test:</p><div class="criterii">' +
+    Object.keys(nume).filter((k) => cr[k]).map((k) => '<div class="criteriu"><span>' + nume[k] + '</span><b>' + esc(cr[k]) + '</b></div>').join('') + '</div>' +
+    (ev.explicatie_ro ? '<p>' + esc(ev.explicatie_ro) + '</p>' : '') +
+    (ev.puncte_forte_ro ? '<p class="bine">' + esc(ev.puncte_forte_ro) + '</p>' : '') +
+    ((ev.dovezi || []).length ? '<h3 class="sub-foaie">Ce te ține pe loc</h3><ul class="greseli">' + ev.dovezi.map((d) => '<li><s>' + esc(d.citat) + '</s><b>' + esc(d.corect) + '</b>' + (d.problema_ro ? '<small>' + esc(d.problema_ro) + '</small>' : '') + '</li>').join('') + '</ul>' : '') +
+    (ev.pentru_nivelul_urmator_ro ? '<h3 class="sub-foaie">Pentru nivelul următor</h3><p class="text-2">' + esc(ev.pentru_nivelul_urmator_ro) + '</p>' : '') + '</div>';
+}
 function mesajMicrofon(e) { return e && e.name === 'NotAllowedError' ? 'Microfonul e blocat: dă voie din setările browserului.' : ((e && e.message) || 'Microfonul nu pornește.'); }
 
 /* redare în engleză (pronunția corectă a cuvintelor, ascultare, replicile profesorului din chat) */
@@ -617,7 +754,9 @@ function tile(href, icon, t, d, nr) {
 }
 function cardLectie(l, eUltima) {
   let h = '<section class="card apasabil" data-lectie="' + esc(l.id) + '"><div class="rand"><b>' + (eUltima ? 'Ultima: ' : '') + esc(NUME_MOD[l.mod] || 'Lecție') + '</b><span class="mic">' + zi(l.data) + ' · ' + (l.mod === 'text' ? (l.replici || 0) + ' mesaje' : durata(l.durata_s)) + (l.cost_usd ? ' · ' + dolari(l.cost_usd) : '') + '</span></div>';
-  if (l.raport_test) h += '<div class="raport-mini"><span class="cefr">' + esc(l.raport_test.cefr) + '</span><span>fluență ' + l.raport_test.fluenta + ' · gramatică ' + l.raport_test.gramatica + ' · vocabular ' + l.raport_test.vocabular + ' · pronunție ' + l.raport_test.pronuntie + '</span></div>';
+  if (l.evaluare && l.evaluare.cefr) { const k = l.evaluare.criterii || {}; h += '<div class="raport-mini"><span class="cefr">' + esc(l.evaluare.cefr) + '</span><span>gramatică ' + esc(k.gramatica || '?') + ' · vocabular ' + esc(k.vocabular || '?') + ' · fluență ' + esc(k.fluenta || '?') + '</span></div>'; }
+  else if (l.raport_test && l.mod === 'test' && !('evaluare' in l)) h += '<div class="raport-mini"><span class="cefr">' + esc(l.raport_test.cefr) + '</span><span>fluență ' + l.raport_test.fluenta + ' · gramatică ' + l.raport_test.gramatica + ' · vocabular ' + l.raport_test.vocabular + ' · pronunție ' + l.raport_test.pronuntie + '</span></div>';
+  if (l.verificare && l.verificare.total) h += '<p class="' + (l.verificare.trecuta ? 'bine' : 'mic') + '">' + (l.verificare.trecuta ? ICON.bifa + ' ' : '') + 'Verificarea: ' + l.verificare.corecte + ' din ' + l.verificare.total + '</p>';
   if (!l.gata && !l.eroare) return h + '<p class="text-2 pulseaza">Rezumatul se pregătește…</p></section>';
   if (l.eroare) return h + '<p class="text-2">Rezumatul n-a mers pentru sesiunea asta.</p></section>';
   if (l.rezumat_ro) h += '<p>' + esc(l.rezumat_ro) + '</p>';
@@ -785,14 +924,15 @@ const T = { test: null, i: 0, rasp: [], ordine: [], start: 0, raspuns: false };
 const MESAJE_INCARCARE = ['Îți aleg greșelile de verificat…', 'Scriu mesajele „clienților”…', 'Amestec variantele…', 'Încă puțin…'];
 async function vedereTest(id, arg) {
   titlu('Test');
-  const m = String(arg || 'rapid').split('?')[0].match(/^(rapid|greseli|cuvinte|ascultare|tema|vorbit|nivel)(?:-(\d{1,2}))?$/);
+  const m = String(arg || 'rapid').split('?')[0].match(/^(rapid|greseli|cuvinte|ascultare|tema|vorbit|nivel|verificare)(?:-(\d{1,2}|U\d{1,2}L[1-5]))?$/);
   const tip = m ? m[1] : 'rapid';
-  const sapt = m && m[2] ? Number(m[2]) : null;
+  const lectieV = m && m[2] && m[2][0] === 'U' ? m[2] : null;
+  const sapt = m && m[2] && !lectieV ? Number(m[2]) : null;
   let k = 0;
   $('#main').innerHTML = '<div class="gol-mare"><div class="incarca-test"><span></span><span></span><span></span></div><h2>Îți pregătesc testul</h2><p class="text-2" id="msg-inc">' + MESAJE_INCARCARE[0] + '</p></div>';
   const ceas = setInterval(() => { const el = $('#msg-inc'); if (el) el.textContent = MESAJE_INCARCARE[++k % MESAJE_INCARCARE.length]; }, 3500);
   let r;
-  try { r = await api('/api/engleza/test/nou', { method: 'POST', body: sapt !== null ? { tip, saptamana: sapt } : { tip } }); } finally { clearInterval(ceas); }
+  try { r = await api('/api/engleza/test/nou', { method: 'POST', body: tip === 'verificare' ? { tip, lectie: lectieV } : sapt !== null ? { tip, saptamana: sapt } : { tip } }); } finally { clearInterval(ceas); }
   if (id !== S.randare) return;
   T.test = r.test; T.i = 0; T.rasp = []; T.start = Date.now();
   T.ordine = T.test.intrebari.map((q) => (q.variante ? amesteca(q.variante.length) : null));
@@ -908,18 +1048,36 @@ async function finalTestNivel() {
   confetti();
   $('#main').innerHTML = '<div class="final-test"><div class="cefr-cerc mare">' + esc(r.nivel || '?') + '</div><h2>Nivelul tău la scris: ' + esc(r.nivel || '?') + '</h2>' +
     '<p class="text-2">' + r.corecte + ' din ' + r.total + ' răspunsuri corecte. Pe fiecare nivel:</p><div class="benzi">' +
-    ['A1', 'A2', 'B1', 'B2', 'C1'].map((b) => { const x = benzi[b] || { corecte: 0, total: 0 }; const f = x.total ? x.corecte / x.total : 0;
+    ['A1', 'A2', 'B1', 'B2', 'C1'].filter((b) => benzi[b] && benzi[b].total).map((b) => { const x = benzi[b] || { corecte: 0, total: 0 }; const f = x.total ? x.corecte / x.total : 0;
       return '<div class="banda"><span>' + b + '</span><div class="scor-bara"><i data-w="' + Math.round(f * 100) + '"></i></div><b>' + x.corecte + '/' + x.total + '</b></div>'; }).join('') + '</div>' +
-    '<p class="bine">Îți construiesc acum cele 100 de lecții pe nivelul ' + esc(r.nivel || '') + '. Le găsești pe Acasă în 1–2 minute.</p>' +
-    '<p class="text-2">Testul scris măsoară gramatica și vocabularul. Pentru vorbit și pronunție, fă și testul vorbit de 10 minute: el stabilește nivelul final și îți potrivește lecțiile.</p>' +
+    '<p class="text-2">Testul scris arată ce recunoști: gramatica și vocabularul. Lecțiile merg după nivelul vorbit' + (S.stare && S.stare.nivel_vorbit ? ' (acum ' + esc(S.stare.nivel_vorbit) + ')' : '') + ', pentru că acolo e ținta ta; de obicei vorbitul e sub scris.</p>' +
+    (S.stare && S.stare.curriculum && (S.stare.curriculum.facute || 0) < 3 ? '<p class="bine">Pentru că ai făcut mai puțin de 3 lecții, ți le potrivesc și după rezultatul ăsta, în 2–3 minute.</p>' : '') +
     '<div class="butoane-col"><button class="buton principal" id="vorbit">' + ICON.mic + ' Acum testul vorbit</button><a class="buton" href="#/acasa">Mai târziu</a></div></div>';
   setTimeout(() => $$('.benzi [data-w]').forEach((el) => { el.style.width = el.dataset.w + '%'; }), 50);
   $('#vorbit').onclick = () => pornesteLectia({ mod: 'test' });
   incarcaStare().catch(() => {});
 }
+async function finalVerificare() {
+  const t = T.test;
+  titlu('Verificarea lecției');
+  const corecte = T.rasp.filter((x) => x && x.corect).length;
+  $('#main').innerHTML = '<div class="gol-mare"><div class="incarca-test"><span></span><span></span><span></span></div><h2>Salvez rezultatul…</h2></div>';
+  let r = null;
+  try { r = await api('/api/engleza/test/rezultat', { method: 'POST', body: { id: t.id, raspunsuri: T.rasp, durata_s: Math.round((Date.now() - T.start) / 1000) } }); } catch (e) { toast('Rezultatul nu s-a salvat: ' + e.message, true); }
+  const prag = (r && r.prag) || t.prag || 4;
+  const ok = r ? !!r.trecuta : corecte >= prag;
+  $('#main').innerHTML = '<div class="final-test"><div class="cefr-cerc mare' + (ok ? '' : ' slab') + '">' + corecte + '/' + t.intrebari.length + '</div>' +
+    '<h2>' + (ok ? 'Lecție trecută' : 'Încă nu e trecută') + '</h2><p class="text-2">' + (ok ? 'Bifată. Data viitoare începi lecția următoare.' : 'Îți trebuie ' + prag + ' din ' + t.intrebari.length + '. Uită-te mai jos la ce n-a mers și mai încearcă.') + '</p>' +
+    '<div class="recapitulare">' + t.intrebari.map((q, i) => (T.rasp[i] && T.rasp[i].corect) ? '' : '<div class="rec-item"><span class="rec-q">' + esc(q.ro || '') + '</span><b>' + esc(q.asteptat) + '</b>' + (T.rasp[i] && T.rasp[i].raspuns ? '<small>Ai spus: „' + esc(T.rasp[i].raspuns) + '”</small>' : '') + '</div>').join('') + '</div>' +
+    '<div class="butoane-col">' + (ok ? '<a class="buton principal" href="#/acasa">Acasă</a>' : '<button class="buton principal" id="inca">Mai încearcă</button><a class="buton" href="#/acasa">Acasă</a>') + '</div></div>';
+  if (ok) confetti();
+  const inca = $('#inca'); if (inca) inca.onclick = () => { location.hash = '#/test/verificare-' + t.lectie_id + '?' + Date.now(); };
+  incarcaStare().catch(() => {});
+}
 async function finalTest() {
   const t = T.test;
   if (t.tip === 'nivel') return finalTestNivel();
+  if (t.tip === 'verificare') return finalVerificare();
   const corecte = T.rasp.filter((r) => r && r.corect).length;
   const procent = corecte / t.intrebari.length;
   titlu('Rezultat');
@@ -1006,7 +1164,7 @@ function corpScris(c) {
 }
 function salveazaScrisInFundal(c) { api('/api/engleza/lectie', { method: 'POST', body: corpScris(c) }).catch(() => {}); }
 function deseneazaScris() {
-  let h = '<div class="chat"><div class="chat-sus"><span class="mic">' + (C.lectieTitlu ? 'Lecția · ' + esc(C.lectieTitlu) : C.saptamana !== null ? 'Tema unității ' + C.saptamana : 'Conversație liberă în scris') + '</span><button class="buton mic-b" id="termina-scris">Termină</button></div><div class="chat-bule" id="bule">';
+  let h = '<div class="chat"><div class="chat-sus"><span class="mic">' + (C.lectieTitlu ? 'Lecția · ' + esc(C.lectieTitlu) : C.saptamana !== null ? 'Tema unității ' + C.saptamana : 'Conversație liberă în scris') + '</span><span class="chat-actiuni">' + (C.lectie ? '<a class="buton mic-b" href="#/test/verificare-' + esc(C.lectie) + '">Verificarea</a>' : '') + '<button class="buton mic-b" id="termina-scris">Termină</button></span></div><div class="chat-bule" id="bule">';
   C.mesaje.forEach((m, i) => {
     h += '<div class="bula ' + (m.de === 'eu' ? 'eu' : 'prof') + '">' + esc(m.text) + (m.de !== 'eu' ? '<button class="buton-rotund mic" data-reda="' + i + '" aria-label="Ascultă">' + ICON.difuzor + '</button>' : '') + '</div>';
     if (m.corectura) h += '<div class="corectura"><span class="eticheta">Mai bine așa</span><b>' + esc(m.corectura.corect) + '</b>' + (m.corectura.nota_ro ? '<small>' + esc(m.corectura.nota_ro) + '</small>' : '') + '</div>';
@@ -1211,8 +1369,12 @@ async function vedereLectie(id, lid) {
   if (id !== S.randare) return;
   const r = l.rezumat || {};
   let h = '<a class="buton mic-b" href="#/istoric">← Istoric</a><section class="card"><div class="rand"><h2>' + esc(NUME_MOD[l.mod] || 'Lecție') + '</h2><span class="mic">' + zi(l.data) + ' · ' + (l.mod === 'text' ? (l.transcript || []).length + ' mesaje' : durata(l.durata_s)) + (l.cost_usd ? ' · ' + dolari(l.cost_usd) : '') + '</span></div>';
-  if (l.raport_test) h += raportScoruri(l.raport_test);
+  if (l.evaluare && l.evaluare.cefr) h += '<div class="raport"><div class="cefr-cerc">' + esc(l.evaluare.cefr) + '</div><div><b>Nivelul vorbit</b><p class="mic">evaluat strict pe tot testul</p></div></div>' + blocEvaluare(l.evaluare);
+  else if (l.mod === 'test' && l.rezumat && !l.evaluare) h += '<p class="text-2 pulseaza">Nivelul se calculează (2–3 minute)…</p>';
+  else if (l.raport_test) h += raportScoruri(l.raport_test);
+  if (l.verificare && l.verificare.total) h += '<div class="verif-sesiune"><b>' + (l.verificare.trecuta ? ICON.bifa + ' Verificarea trecută: ' : 'Verificarea: ') + l.verificare.corecte + ' din ' + l.verificare.total + '</b><ul class="verif-lista">' + (l.verificare.itemi || []).map((i) => '<li class="' + (i.corect ? 'ok' : 'gresit') + '"><b>' + (i.corect ? '✓' : '✗') + '</b><span>' + esc(i.a_spus || '') + (!i.corect && i.varianta_buna ? '<small class="bine">' + esc(i.varianta_buna) + '</small>' : '') + '</span></li>').join('') + '</ul></div>';
   if (!l.rezumat) h += '<p class="text-2 pulseaza">Rezumatul se pregătește…</p>';
+  if ((l.rezumat || {}).calitate_audio) h += '<p class="mic">Cât de clar te-a prins microfonul: ' + esc({ buna: 'bine', medie: 'mediu', slaba: 'slab' }[l.rezumat.calitate_audio] || l.rezumat.calitate_audio) + '</p>';
   if (r.rezumat_ro) h += '<p>' + esc(r.rezumat_ro) + '</p>';
   if (r.progres_ro) h += '<p class="bine">' + esc(r.progres_ro) + '</p>';
   h += '</section>';
@@ -1220,28 +1382,45 @@ async function vedereLectie(id, lid) {
   if ((r.cuvinte_noi || []).length) h += '<h2 class="titlu">Cuvinte noi</h2><section class="card"><ul class="cuvinte">' + r.cuvinte_noi.map((c, i) => '<li><button class="buton-rotund mic" data-cuv="' + i + '" aria-label="Ascultă">' + ICON.difuzor + '</button><b>' + esc(c.en) + '</b><span>' + esc(c.ro) + '</span></li>').join('') + '</ul></section>';
   if (r.data_viitoare_en) h += '<p class="mic centru">' + esc(r.data_viitoare_en) + '</p>';
   if ((l.transcript || []).length) h += '<details class="card"><summary>Tot textul conversației (' + l.transcript.length + ' replici)</summary><div class="chat-bule static">' + l.transcript.map((t) => '<div class="bula ' + (t.de === 'eu' ? 'eu' : 'prof') + '">' + esc(t.text) + '</div>').join('') + '</div></details>';
+  h += blocFeedback('Ceva n-a mers la sesiunea asta?');
   $('#main').innerHTML = h;
   $$('[data-cuv]').forEach((b) => { b.onclick = () => reda(r.cuvinte_noi[Number(b.dataset.cuv)].en, b); });
-  if (!l.rezumat) setTimeout(() => { if (ruta().v === 'lectie' && ruta().arg === lid) vedereLectie(++S.randare, lid); }, 5000);
+  legaFeedback({ sesiune: lid, lectie: l.lectie_id || undefined, ecran: 'sesiune' });
+  const recenta = Date.now() - new Date(String(l.data || '').replace(' ', 'T')).getTime() < 15 * 60000;
+  if (!l.rezumat || (l.mod === 'test' && !l.evaluare && recenta)) setTimeout(() => { if (ruta().v === 'lectie' && ruta().arg === lid) vedereLectie(++S.randare, lid); }, 5000);
 }
 
 /* ------------------------------------------------------------ LECȚIA VORBITĂ (OpenAI Realtime, WebRTC) */
+/* 1.5 (24.11): lecția are 5 pași pe ecran și se termină cu verificarea finală (minim 4 din 5), pe care profesorul o notează
+   prin funcții; „Nu asta am zis” îi spune profesorului că a auzit greșit; cercul îl oprește când vorbește (vocea ta nu-l
+   mai întrerupe, ca să nu-l taie zgomotul de pe stradă); fiecare sesiune își salvează diagnosticul (microfon, cât de clar
+   a prins transcrierea, tokeni), ca să pot repara aplicația din date, nu din ghicit. */
 const L = {
   faza: 'oprit', pc: null, dc: null, flux: null, transcript: [], inceput: 0, cost: 0, mut: false, mod: 'lectie', saptamana: null,
   oprireCeruta: false, reconectari: 0, ceas: null, wake: null, salvare: null, raport: null, apeluri: new Set(),
   ac: null, anMic: null, anProf: null, buf: null, rafId: 0, stare: '',
+  plan: null, pas: 0, pasInceput: 0, nudge: {}, verif: null, raspunsActiv: false, audioProf: false, vorbeste: false,
+  coadaApp: [], inchidere: null, asteaptaFinal: false, rolNote: 'system', diag: null, zgomot: 'far_field', mic: null,
 };
+const NUME_PAS_SCURT = ['Încălzire', 'Ce înveți', 'Exersezi', 'Situația', 'Verificarea'];
+function secundeLive() { return L.inceput ? Math.round((Date.now() - L.inceput) / 1000) : 0; }
+function diagNou() {
+  return { versiune: VERSIUNE_APP, segmente: 0, scurte: 0, lp: [], neclare: 0, nu_am_zis: [], raspunsuri: 0, opriri: 0, vorbiri: 0,
+    tokeni: { ain: 0, ain_cache: 0, aout: 0, tin: 0, tin_cache: 0, tout: 0 }, pasi: [], note_app: 0, erori: [] };
+}
 function ecranLive() {
   const examen = L.mod === 'test';
-  $('#main').innerHTML = '<div class="live' + (examen ? ' examen' : '') + '">' +
+  $('#main').innerHTML = '<div class="live' + (examen ? ' examen' : '') + (L.plan ? ' cu-pasi' : '') + '">' +
     '<div class="live-sus"><span class="eticheta-live">' + (examen ? 'Test vorbit' : (L.numeScenariu ? 'Simulare · ' + esc(L.numeScenariu) : (L.lectieTitlu ? 'Lecția · ' + esc(L.lectieTitlu) : NUME_MOD[L.mod]))) + (L.saptamana !== null ? ' · săpt. ' + L.saptamana : '') + '</span><span class="mic"><span id="ceas">0:00</span> · <span id="cost">$0.00</span></span></div>' +
-    '<div class="orb-live" id="orb"><span class="orb-halou"></span><span class="orb-corp"></span></div>' +
-    '<p class="stare" id="stare">Mă conectez…</p><p class="mic centru" id="sub-stare">' + (examen ? 'Fără corecturi în timpul testului. La final primești nivelul și scorurile.' : 'Vorbește liber. Profesorul te așteaptă când faci pauze.') + '</p>' +
+    '<div class="pasi-live" id="pasi-live" hidden></div>' +
+    '<button class="orb-live" id="orb" aria-label="Oprește profesorul"><span class="orb-halou"></span><span class="orb-corp"></span></button>' +
+    '<p class="stare" id="stare">Mă conectez…</p><p class="mic centru" id="sub-stare">' + (examen ? 'Fără corecturi în timpul testului. Nivelul îl calculez la final, din tot ce ai spus.' : 'Vorbește liber. Ca să-l oprești când vorbește, atinge cercul.') + '</p>' +
+    '<div class="verif-live" id="verif-live" hidden></div>' +
     '<div class="comenzi">' +
     '<button class="buton" id="mut">' + ICON.mic + ' Microfon</button>' +
+    '<button class="buton" id="nu-am-zis">Nu asta am zis</button>' +
     '<button class="buton" id="rar">Mai rar</button>' +
-    '<button class="buton" id="repede">Mai repede</button>' +
-    (examen ? '<button class="buton" id="text-buton">Text</button>' : '<button class="buton" id="recap">Recap</button>') +
+    (examen ? '<button class="buton" id="text-buton">Text</button>' : '<button class="buton" id="urmatorul">' + (L.plan ? 'Pasul următor' : 'Recap') + '</button>') +
     '</div>' +
     '<div class="subtitrari" id="subtitrari"' + (setari.subtitrari ? '' : ' hidden') + '></div>' +
     '<button class="buton pericol lat" id="termina">' + (examen ? 'Oprește testul' : 'Termină lecția') + '</button>' +
@@ -1249,8 +1428,9 @@ function ecranLive() {
     '</div>';
   $('#mut').onclick = comutaMut;
   $('#rar').onclick = () => schimbaViteza(-0.1);
-  $('#repede').onclick = () => schimbaViteza(0.1);
-  const rc = $('#recap'); if (rc) rc.onclick = () => trimiteText('recap');
+  $('#nu-am-zis').onclick = nuAstaAmZis;
+  $('#orb').onclick = opresteProfesorul;
+  const urm = $('#urmatorul'); if (urm) urm.onclick = () => (L.plan ? pasulUrmator() : trimiteText('recap'));
   const tb = $('#text-buton') || $('#arata-text');
   if (tb) tb.onclick = () => {
     setari.subtitrari = !setari.subtitrari; salveazaSetari();
@@ -1259,6 +1439,7 @@ function ecranLive() {
     deseneazaSubtitrari();
   };
   $('#termina').onclick = () => terminaLectia(false);
+  if (L.plan) { deseneazaPasii(); deseneazaVerificarea(); }
 }
 function seteazaStare(text, clasa) {
   L.stare = clasa || '';
@@ -1268,14 +1449,25 @@ function seteazaStare(text, clasa) {
 function deseneazaSubtitrari() {
   const el = $('#subtitrari');
   if (!el || el.hidden) return;
-  el.innerHTML = L.transcript.slice(-10).map((t) => '<p class="' + (t.de === 'eu' ? 'eu' : 'prof') + '">' + esc(t.text) + '</p>').join('');
+  el.innerHTML = L.transcript.slice(-10).map((t) => '<p class="' + (t.de === 'eu' ? 'eu' : 'prof') + (t.de === 'eu' && typeof t.lp === 'number' && Math.exp(t.lp) < 0.6 ? ' neclar' : '') + (t.contestat ? ' contestat' : '') + '">' + esc(t.text) + '</p>').join('');
   el.scrollTop = el.scrollHeight;
 }
-function adaugaReplica(de, text) {
+function adaugaReplica(de, text, lp) {
   text = String(text || '').trim();
   if (!text) return;
-  L.transcript.push({ de, text, ts: new Date().toISOString() });
+  const r = { de, text, ts: new Date().toISOString() };
+  if (typeof lp === 'number' && isFinite(lp)) r.lp = Math.round(lp * 1000) / 1000;
+  L.transcript.push(r);
+  if (de === 'eu' && L.diag) {
+    L.diag.segmente += 1;
+    if (text.split(/\s+/).length <= 2) L.diag.scurte += 1;
+    if (typeof r.lp === 'number') { L.diag.lp.push(r.lp); if (Math.exp(r.lp) < 0.6) L.diag.neclare += 1; }
+  }
   deseneazaSubtitrari();
+}
+function lpMedie(ev) {
+  const l = ev && Array.isArray(ev.logprobs) ? ev.logprobs.filter((x) => x && typeof x.logprob === 'number') : [];
+  return l.length ? l.reduce((a, x) => a + x.logprob, 0) / l.length : null;
 }
 function costDin(u) {
   if (!u) return 0;
@@ -1284,34 +1476,261 @@ function costDin(u) {
   let cA = cd.audio_tokens, cT = cd.text_tokens;
   if (cA === undefined && cT === undefined) { const c = it.cached_tokens || 0; cT = Math.min(tin, c); cA = Math.min(ain, c - cT); }
   cA = cA || 0; cT = cT || 0;
+  if (L.diag) {
+    const k = L.diag.tokeni;
+    k.ain += ain - cA; k.ain_cache += cA; k.tin += tin - cT; k.tin_cache += cT; k.aout += ot.audio_tokens || 0; k.tout += ot.text_tokens || 0;
+  }
   return ((ain - cA) * PRET.audio_in + cA * PRET.audio_in_cache + (tin - cT) * PRET.text_in + cT * PRET.text_in_cache + (ot.audio_tokens || 0) * PRET.audio_out + (ot.text_tokens || 0) * PRET.text_out) / 1e6;
 }
-function laApelFunctie(nume, callId, argumente) {
-  if (!callId || L.apeluri.has(callId)) return;
-  L.apeluri.add(callId);
-  if (nume === 'raport_test') {
-    try { L.raport = JSON.parse(argumente || '{}'); } catch (e) { L.raport = null; }
-    trimiteEveniment({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify({ ok: true, salvat: true }) } });
-    trimiteEveniment({ type: 'response.create' });
-    const ss = $('#sub-stare'); if (ss) ss.textContent = 'Rezultatul e gata. Îl vezi imediat ce închizi testul.';
-    if (L.raport && L.raport.cefr) toast('Testul s-a încheiat: nivel ' + L.raport.cefr);
+
+/* --- pașii lecției */
+function deseneazaPasii() {
+  const el = $('#pasi-live'); if (!el || !L.plan) return;
+  el.hidden = false;
+  const v = L.verif || {};
+  el.innerHTML = '<div class="pasi-sir">' + (L.plan.pasi || []).map((x, i) => {
+    const nr = i + 1, gata = nr < L.pas || (nr === 5 && v.gata && v.trecuta);
+    return '<button class="pas-chip' + (gata ? ' gata' : nr === L.pas ? ' activ' : '') + '" data-pas="' + nr + '" aria-label="Pasul ' + nr + ': ' + esc(x.nume) + '"><b>' + (gata ? ICON.bifa : nr) + '</b><span>' + esc(NUME_PAS_SCURT[i] || x.nume) + '</span></button>';
+  }).join('') + '</div><p class="mic centru" id="pas-timp"></p>';
+  $$('[data-pas]', el).forEach((b) => { b.onclick = () => saltLaPas(Number(b.dataset.pas)); });
+  const u = $('#urmatorul');
+  if (u) u.textContent = L.pas >= 5 ? (v.gata && !v.trecuta ? 'Reia verificarea' : 'Verificarea') : 'Pasul următor';
+  actualizeazaTimpPas();
+}
+function actualizeazaTimpPas() {
+  const el = $('#pas-timp'); if (!el || !L.plan) return;
+  if (!L.pas) { el.textContent = 'Profesorul începe cu încălzirea'; return; }
+  if (L.pas === 5 && L.verif && L.verif.gata) { el.textContent = L.verif.trecuta ? 'Lecție trecută' : 'Verificare terminată'; return; }
+  const p = L.plan.pasi[L.pas - 1] || {};
+  el.textContent = 'Pasul ' + L.pas + ' din 5 · ' + (p.nume || '') + ' · ' + durata((Date.now() - L.pasInceput) / 1000) + ' din ~' + (p.minute || 3) + ' min';
+}
+function seteazaPas(nr) {
+  nr = Math.max(1, Math.min(5, parseInt(nr, 10) || 1));
+  if (nr === 5 && L.verif && L.verif.gata) { // „check again”: încă o încercare, cu aceleași 5 sarcini
+    L.verif.itemi = []; L.verif.gata = false; L.verif.trecuta = false; L.verif.incercari += 1; L.asteaptaFinal = false;
+    anuleazaInchiderea();
+    const f = $('.final-live'); if (f) f.remove();
   }
+  if (nr !== L.pas) { L.pas = nr; L.pasInceput = Date.now(); if (L.diag) L.diag.pasi.push({ nr, t: secundeLive() }); }
+  deseneazaPasii();
+  deseneazaVerificarea();
+}
+function saltLaPas(nr) {
+  if (!L.plan || L.faza !== 'live') return;
+  if (nr === 5 && L.verif && L.verif.gata) { reiaVerificarea(); return; }
+  if (nr === L.pas) return;
+  notaApp('Andrei tapped step ' + nr + ' (' + (L.plan.pasi[nr - 1] || {}).cheie + ') on his screen. Go to step ' + nr + ' now: call pas with ' + nr + ' and start it.');
+  toast('Trecem la: ' + (NUME_PAS_SCURT[nr - 1] || 'pasul ' + nr));
+}
+function pasulUrmator() {
+  if (!L.plan) return;
+  if (L.pas >= 5) { if (L.verif.gata && !L.verif.trecuta) reiaVerificarea(); else saltLaPas(5); return; }
+  saltLaPas(Math.max(2, (L.pas || 1) + 1));
+}
+function reiaVerificarea() {
+  notaApp('Andrei wants to retry the final check: call pas with 5 and give the same five tasks again, from the first one.');
+  toast('Reiei verificarea');
+}
+function verificaTimpulPasului() {
+  if (!L.plan || L.faza !== 'live') return;
+  if (!L.pas) {
+    if (secundeLive() > 180 && !L.nudge[0]) { L.nudge[0] = true; notaApp('Remember: call pas at the start of each lesson step, so his screen shows where he is. Call it now with the step you are in.'); }
+    return;
+  }
+  if (L.pas >= 5 || L.nudge[L.pas]) return;
+  const p = L.plan.pasi[L.pas - 1] || {};
+  if ((Date.now() - L.pasInceput) / 1000 > (p.minute || 3) * 60 + 75) {
+    L.nudge[L.pas] = true;
+    notaApp('Step ' + L.pas + ' is over its time. Finish it in one sentence and move on to step ' + (L.pas + 1) + ' (call pas).');
+  }
+}
+
+/* --- verificarea finală */
+function deseneazaVerificarea() {
+  const el = $('#verif-live'); if (!el || !L.plan || !L.verif) return;
+  const t = L.plan.total || 5, v = L.verif;
+  if (L.pas !== 5 && !v.itemi.length) { el.hidden = true; return; }
+  el.hidden = false;
+  const dupaNr = {};
+  v.itemi.forEach((x) => { dupaNr[x.nr] = x; });
+  const ultim = v.itemi[v.itemi.length - 1];
+  const sarc = urmatoareaSarcina();
+  const urm = sarc ? (L.plan.verificare || [])[sarc.nr - 1] : null;
+  const final = $('.final-live');
+  el.innerHTML = '<div class="rand"><span class="eticheta">Verificarea finală' + (v.incercari > 1 ? ' · încercarea ' + v.incercari : '') + '</span><span class="mic">' + v.itemi.filter((x) => x.corect).length + ' corecte · îți trebuie ' + L.plan.prag + ' din ' + t + '</span></div>' +
+    '<div class="verif-puncte">' + Array.from({ length: t }, (_, i) => { const x = dupaNr[i + 1]; return '<span class="' + (x ? (x.corect ? 'ok' : 'gresit') : '') + '">' + (x ? (x.corect ? '✓' : '✗') : i + 1) + '</span>'; }).join('') + '</div>' +
+    (ultim && !ultim.corect && ultim.varianta_buna ? '<p class="mic">Corect era: <b>' + esc(ultim.varianta_buna) + '</b></p>' : '') +
+    (!v.gata && urm ? '<p class="mic text-2">Sarcina ' + sarc.nr + ': ' + esc(urm.ro || urm.cerinta || '') + '</p>' : '');
+  if (final) el.appendChild(final);
+}
+function urmatoareaSarcina() {
+  if (!L.plan || !L.verif) return null;
+  const facute = new Set(L.verif.itemi.map((x) => x.nr));
+  for (let i = 1; i <= L.plan.total; i++) {
+    if (!facute.has(i)) return { nr: i, of: L.plan.total, text: (L.plan.verificare[i - 1] || {}).cerinta || '' };
+  }
+  return null;
+}
+function notaVerificare(a) {
+  const P = L.plan;
+  if (!P || !L.verif) return { ok: false, error: 'no lesson plan in this session' };
+  const v = L.verif;
+  if (L.pas !== 5) seteazaPas(5);
+  const nr = Math.max(1, Math.min(P.total, parseInt(a.nr, 10) || (v.itemi.length + 1)));
+  v.itemi = v.itemi.filter((x) => x.nr !== nr).concat([{ nr, a_spus: String(a.a_spus || '').slice(0, 400), corect: a.corect === true, varianta_buna: String(a.varianta_buna || '').slice(0, 400) }]).sort((x, y) => x.nr - y.nr);
+  const corecte = v.itemi.filter((x) => x.corect).length;
+  let out;
+  if (v.itemi.length >= P.total) {
+    v.gata = true; v.trecuta = corecte >= P.prag;
+    pastreazaIncercarea();
+    L.asteaptaFinal = true;
+    out = { ok: true, final_check_done: true, correct: corecte, total: P.total, passed: v.trecuta, pass_mark: P.prag,
+      next: v.trecuta ? 'Tell him the score, congratulate him in a few words and say goodbye. The lesson is over.'
+        : 'Tell him the score, name the one structure to review, and tell him he can say "check again" to retry the five tasks.' };
+  } else {
+    out = { ok: true, answered: v.itemi.length, correct_so_far: corecte, next_task: urmatoareaSarcina() };
+  }
+  deseneazaPasii();
+  deseneazaVerificarea();
+  return out;
+}
+function pastreazaIncercarea() {
+  const v = L.verif, c = v.itemi.filter((x) => x.corect).length;
+  if (!v.cea_mai_buna || c > v.cea_mai_buna.itemi.filter((x) => x.corect).length) v.cea_mai_buna = { itemi: v.itemi.slice(), total: L.plan.total };
+}
+function verificareDeSalvat() {
+  if (!L.plan || !L.verif) return undefined;
+  const v = L.verif;
+  const x = v.cea_mai_buna || (v.itemi.length ? { itemi: v.itemi, total: L.plan.total } : null);
+  return x ? { itemi: x.itemi, total: x.total, incercari: v.incercari } : undefined;
+}
+function arataFinalLive() {
+  const v = L.verif, el = $('#verif-live');
+  if (!el || !v || L.faza !== 'live') return;
+  const vechi = $('.final-live'); if (vechi) vechi.remove();
+  const c = v.itemi.filter((x) => x.corect).length;
+  if (v.trecuta) {
+    let ramas = 25;
+    el.insertAdjacentHTML('beforeend', '<div class="final-live bine"><b>' + ICON.bifa + ' Lecție trecută: ' + c + ' din ' + L.plan.total + '</b><p class="mic" id="inchide-in">Se închide singură în ' + ramas + ' s</p><div class="butoane"><button class="buton principal" id="inchide-acum">Închei acum</button><button class="buton" id="mai-vorbim">Mai vorbim</button></div></div>');
+    $('#inchide-acum').onclick = () => terminaLectia(true);
+    $('#mai-vorbim').onclick = () => { anuleazaInchiderea(); const f = $('.final-live'); if (f) f.remove(); };
+    L.inchidere = setInterval(() => {
+      ramas -= 1;
+      const t = $('#inchide-in'); if (t) t.textContent = 'Se închide singură în ' + ramas + ' s';
+      if (ramas <= 0) { anuleazaInchiderea(); terminaLectia(true); }
+    }, 1000);
+    confetti();
+  } else {
+    el.insertAdjacentHTML('beforeend', '<div class="final-live"><b>' + c + ' din ' + L.plan.total + ': încă nu e trecută</b><p class="mic">Îți trebuie ' + L.plan.prag + '. Spune „check again” sau apasă mai jos.</p><div class="butoane"><button class="buton principal" id="reia-verif">Reia verificarea</button></div></div>');
+    $('#reia-verif').onclick = reiaVerificarea;
+  }
+  deseneazaPasii();
+}
+function anuleazaInchiderea() {
+  if (!L.inchidere) return;
+  clearInterval(L.inchidere); L.inchidere = null;
+  const t = $('#inchide-in'); if (t) t.textContent = 'Rămânem. Termini când vrei.';
+}
+
+/* --- notele aplicației către profesor, „Nu asta am zis”, oprirea profesorului */
+function notaApp(text) {
+  L.coadaApp.push(text);
+  golesteCoadaApp();
+}
+function golesteCoadaApp() {
+  if (!L.coadaApp.length || L.raspunsActiv || L.audioProf || L.vorbeste || !L.dc || L.dc.readyState !== 'open') return;
+  const text = L.coadaApp.shift();
+  trimiteEveniment({ type: 'conversation.item.create', item: { type: 'message', role: L.rolNote, content: [{ type: 'input_text', text: '[APP] ' + text }] } });
+  trimiteEveniment({ type: 'response.create' });
+  L.raspunsActiv = true;
+  if (L.diag) L.diag.note_app += 1;
+}
+function opresteProfesorul() {
+  if (L.faza !== 'live' || !(L.raspunsActiv || L.audioProf)) return;
+  trimiteEveniment({ type: 'response.cancel' });
+  trimiteEveniment({ type: 'output_audio_buffer.clear' });
+  L.audioProf = false;
+  if (L.diag) L.diag.opriri += 1;
+  seteazaStare(L.mut ? 'Microfonul e oprit' : 'Rândul tău', L.mut ? 'mut' : 'asteapta');
+}
+function nuAstaAmZis() {
+  if (L.faza !== 'live') return;
+  const ultim = (de) => { for (let i = L.transcript.length - 1; i >= 0; i--) if (L.transcript[i].de === de) return L.transcript[i]; return null; };
+  const eu = ultim('eu'), prof = ultim('profesor');
+  if (eu) eu.contestat = true;
+  if (L.diag && L.diag.nu_am_zis.length < 50) L.diag.nu_am_zis.push({ t: secundeLive(), eu: eu ? eu.text.slice(0, 300) : '', prof: prof ? prof.text.slice(0, 300) : '', lp: eu ? eu.lp : null });
+  opresteProfesorul();
+  notaApp('Andrei says you misheard him: he did not say what you understood or corrected. Say "Sorry, my mistake." in a few words, drop that correction and go on. Ask him to say it again only if you really need it.');
+  toast('I-am spus că a auzit greșit.');
+  deseneazaSubtitrari();
+}
+
+/* --- funcțiile apelate de profesor (doar la response.done, ca să nu pornim un răspuns peste altul) */
+function laApelFunctie(nume, callId, argumente) {
+  if (!callId || L.apeluri.has(callId)) return false;
+  L.apeluri.add(callId);
+  let a = {};
+  try { a = JSON.parse(argumente || '{}') || {}; } catch (e) { a = {}; }
+  let iesire = { ok: true };
+  if (nume === 'raport_test') {
+    L.raport = a;
+    iesire = { ok: true, saved: true };
+    const ss = $('#sub-stare'); if (ss) ss.textContent = 'Testul s-a încheiat. Nivelul îl calculez din tot ce ai spus, după ce închizi.';
+  } else if (nume === 'pas') {
+    seteazaPas(a.nr);
+    iesire = { ok: true, step: L.pas };
+    if (L.pas === 5 && L.plan && L.verif && !L.verif.gata) {
+      const t = urmatoareaSarcina();
+      if (t) iesire.task = t; // profesorul citește sarcina exactă dată de aplicație, nu una din exerciții
+    }
+  } else if (nume === 'verificare') {
+    iesire = notaVerificare(a);
+  } else {
+    iesire = { ok: false, error: 'unknown function' };
+  }
+  trimiteEveniment({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(iesire) } });
+  return true;
 }
 function laEveniment(ev) {
   switch (ev.type) {
-    case 'input_audio_buffer.speech_started': seteazaStare('Te ascult…', 'asculta'); break;
-    case 'input_audio_buffer.speech_stopped': seteazaStare('Se gândește…', 'gandeste'); break;
-    case 'response.created': seteazaStare(L.mod === 'test' ? 'Examinatorul vorbește' : 'Profesorul vorbește', 'vorbeste'); break;
+    case 'input_audio_buffer.speech_started':
+      L.vorbeste = true;
+      if (L.diag) L.diag.vorbiri += 1;
+      if (L.inchidere) anuleazaInchiderea();
+      seteazaStare('Te ascult…', 'asculta');
+      break;
+    case 'input_audio_buffer.speech_stopped': L.vorbeste = false; seteazaStare('Se gândește…', 'gandeste'); setTimeout(golesteCoadaApp, 400); break;
+    case 'response.created': L.raspunsActiv = true; seteazaStare(L.mod === 'test' ? 'Examinatorul vorbește' : 'Profesorul vorbește', 'vorbeste'); break;
+    case 'output_audio_buffer.started': L.audioProf = true; seteazaStare(L.mod === 'test' ? 'Examinatorul vorbește' : 'Profesorul vorbește', 'vorbeste'); break;
+    case 'output_audio_buffer.stopped':
+    case 'output_audio_buffer.cleared':
+      L.audioProf = false;
+      if (!L.raspunsActiv) seteazaStare(L.mut ? 'Microfonul e oprit' : 'Rândul tău', L.mut ? 'mut' : 'asteapta');
+      setTimeout(golesteCoadaApp, 300);
+      break;
     case 'response.done': {
-      L.cost += costDin(ev.response && ev.response.usage);
-      (ev.response && ev.response.output || []).forEach((o) => { if (o && o.type === 'function_call') laApelFunctie(o.name, o.call_id, o.arguments); });
-      seteazaStare(L.mut ? 'Microfonul e oprit' : 'Rândul tău', L.mut ? 'mut' : 'asteapta');
+      L.raspunsActiv = false;
+      const r = ev.response || {};
+      L.cost += costDin(r.usage);
+      if (L.diag) L.diag.raspunsuri += 1;
+      let continua = false;
+      (r.output || []).forEach((o) => { if (o && o.type === 'function_call' && laApelFunctie(o.name, o.call_id, o.arguments)) continua = true; });
+      if (continua) { trimiteEveniment({ type: 'response.create' }); L.raspunsActiv = true; }
+      else if (L.asteaptaFinal && r.status === 'completed') { L.asteaptaFinal = false; arataFinalLive(); }
+      if (!L.raspunsActiv && !L.audioProf) seteazaStare(L.mut ? 'Microfonul e oprit' : 'Rândul tău', L.mut ? 'mut' : 'asteapta');
+      setTimeout(golesteCoadaApp, 300);
       break;
     }
-    case 'response.function_call_arguments.done': laApelFunctie(ev.name, ev.call_id, ev.arguments); break;
-    case 'conversation.item.input_audio_transcription.completed': adaugaReplica('eu', ev.transcript); break;
+    case 'conversation.item.input_audio_transcription.completed': adaugaReplica('eu', ev.transcript, lpMedie(ev)); break;
     case 'response.output_audio_transcript.done': adaugaReplica('profesor', ev.transcript); break;
-    case 'error': { const m = (ev.error && ev.error.message) || 'eroare'; if (!/cancel|no active response|already/i.test(m)) toast('OpenAI: ' + m, true); break; }
+    case 'error': {
+      const m = (ev.error && ev.error.message) || 'eroare';
+      if (L.diag && L.diag.erori.length < 20) L.diag.erori.push(m.slice(0, 200));
+      if (/role/i.test(m) && L.rolNote === 'system') L.rolNote = 'user';
+      if (/active response/i.test(m)) L.raspunsActiv = true;
+      if (!/cancel|no active response|already|active response/i.test(m)) toast('OpenAI: ' + m, true);
+      break;
+    }
     default: break;
   }
 }
@@ -1350,7 +1769,7 @@ function leagaSunetProfesor(stream) {
   } catch (e) { L.anProf = null; }
 }
 async function conecteaza(reluare) {
-  const corp = { mod: L.mod, drum: S.drum || drumImplicit(), viteza: setari.viteza, rabdare: setari.rabdare, zgomot: setari.zgomot, reluare: reluare || [] };
+  const corp = { mod: L.mod, drum: S.drum || drumImplicit(), viteza: setari.viteza, rabdare: setari.rabdare, zgomot: L.zgomot, intrerupere: false, pasi: true, reluare: reluare || [] };
   if (L.saptamana !== null) corp.saptamana = L.saptamana;
   if (L.scenariu) corp.scenariu = L.scenariu;
   if (L.lectie) corp.lectie = L.lectie;
@@ -1360,13 +1779,26 @@ async function conecteaza(reluare) {
     L.lectie = s.lectie; L.lectieTitlu = s.lectie_titlu || null;
     const et = $('.eticheta-live'); if (et && L.lectieTitlu) et.textContent = 'Lecția · ' + L.lectieTitlu;
   }
+  if (s.plan && !L.plan) {
+    L.plan = s.plan;
+    L.verif = { itemi: [], gata: false, trecuta: false, incercari: 1, cea_mai_buna: null };
+    const lv = $('.live'); if (lv) lv.classList.add('cu-pasi');
+    deseneazaPasii();
+  }
+  if (L.diag) { L.diag.zgomot = s.zgomot || L.zgomot; L.diag.intrerupere = !!s.intrerupere; L.diag.cu_pasi = !!s.plan; }
   const pc = new RTCPeerConnection();
   const sunet = $('#sunet');
   pc.ontrack = (e) => { sunet.srcObject = e.streams[0]; sunet.play().catch(() => {}); leagaSunetProfesor(e.streams[0]); };
   L.flux.getAudioTracks().forEach((t) => { t.enabled = !L.mut; pc.addTrack(t, L.flux); });
   const dc = pc.createDataChannel('oai-events');
   dc.onmessage = (e) => { try { laEveniment(JSON.parse(e.data)); } catch (x) { /* ignor */ } };
-  dc.onopen = () => { dc.send(JSON.stringify({ type: 'response.create' })); };
+  dc.onopen = () => {
+    if (reluare && reluare.length && L.plan && L.pas) {
+      dc.send(JSON.stringify({ type: 'conversation.item.create', item: { type: 'message', role: L.rolNote, content: [{ type: 'input_text', text: '[APP] The lesson was at step ' + L.pas + (L.pas === 5 && L.verif ? ' (final check, ' + L.verif.itemi.length + ' tasks answered so far)' : '') + ' when the connection dropped. Continue from there; do not call pas again for this step.' }] } }));
+    }
+    dc.send(JSON.stringify({ type: 'response.create' }));
+    L.raspunsActiv = true;
+  };
   const oferta = await pc.createOffer();
   await pc.setLocalDescription(oferta);
   const r = await fetch('https://api.openai.com/v1/realtime/calls', { method: 'POST', body: oferta.sdp, referrerPolicy: 'no-referrer', headers: { Authorization: 'Bearer ' + s.cheie, 'Content-Type': 'application/sdp' } });
@@ -1383,6 +1815,7 @@ async function reconecteaza() {
   try {
     if (L.reconectari >= 4) { toast('Legătura a căzut de prea multe ori. Salvez sesiunea.', true); reconectareInCurs = false; await terminaLectia(true); return; }
     L.reconectari += 1;
+    L.raspunsActiv = false; L.audioProf = false; L.vorbeste = false;
     seteazaStare('Reconectez…', 'gandeste');
     try { if (L.pc) L.pc.close(); } catch (e) { /* ignor */ }
     L.pc = null; L.dc = null;
@@ -1399,6 +1832,7 @@ function trimiteEveniment(ev) { if (L.dc && L.dc.readyState === 'open') L.dc.sen
 function trimiteText(text) {
   trimiteEveniment({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] } });
   trimiteEveniment({ type: 'response.create' });
+  L.raspunsActiv = true;
   adaugaReplica('eu', text);
 }
 function schimbaViteza(d) {
@@ -1419,10 +1853,19 @@ async function tineEcranul() {
   if (!('wakeLock' in navigator)) return;
   try { L.wake = await navigator.wakeLock.request('screen'); } catch (e) { L.wake = null; }
 }
+function diagnosticDeSalvat(durataS) {
+  const d = L.diag;
+  if (!d) return undefined;
+  const lp = d.lp || [];
+  return Object.assign({}, d, { lp: undefined, lp_medie: lp.length ? Math.round(lp.reduce((a, x) => a + x, 0) / lp.length * 1000) / 1000 : null,
+    procent_neclar: d.segmente ? Math.round(100 * d.neclare / d.segmente) : null, durata_s: durataS, reconectari: L.reconectari,
+    cost: Math.round(L.cost * 10000) / 10000, pas_final: L.pas || null });
+}
 function salveazaLocal() {
   try {
     localStorage.setItem(CHEIE_LECTIE, JSON.stringify({ transcript: L.transcript, durata_s: Math.round((Date.now() - L.inceput) / 1000),
-      cost_usd: Math.round(L.cost * 10000) / 10000, mod: L.mod, drum: S.drum, raport_test: L.raport, saptamana: L.saptamana, lectie: L.lectie || undefined }));
+      cost_usd: Math.round(L.cost * 10000) / 10000, mod: L.mod, drum: S.drum, raport_test: L.raport, saptamana: L.saptamana, lectie: L.lectie || undefined,
+      verificare: verificareDeSalvat(), diagnostic: diagnosticDeSalvat(Math.round((Date.now() - L.inceput) / 1000)) }));
   } catch (e) { /* ignor */ }
 }
 async function pornesteLectia(opt) {
@@ -1431,7 +1874,9 @@ async function pornesteLectia(opt) {
   Object.assign(L, { faza: 'conectare', transcript: [], cost: 0, mut: false, oprireCeruta: false, reconectari: 0, raport: null, apeluri: new Set(),
     mod: (opt && opt.mod) || 'lectie', saptamana: opt && Number.isInteger(opt.saptamana) ? opt.saptamana : null,
     scenariu: (opt && opt.scenariu) || null, numeScenariu: (opt && opt.numeScenariu) || null,
-    lectie: (opt && opt.lectie) || null, lectieTitlu: (opt && opt.titlu) || null });
+    lectie: (opt && opt.lectie) || null, lectieTitlu: (opt && opt.titlu) || null,
+    plan: null, pas: 0, pasInceput: 0, nudge: {}, verif: null, raspunsActiv: false, audioProf: false, vorbeste: false,
+    coadaApp: [], inchidere: null, asteaptaFinal: false, rolNote: 'system', diag: diagNou(), mic: null });
   location.hash = '#/live';
   document.body.classList.add('in-lectie');
   ecranLive();
@@ -1440,6 +1885,10 @@ async function pornesteLectia(opt) {
   } catch (e) {
     L.faza = 'oprit'; toast(mesajMicrofon(e), true); location.hash = '#/acasa'; return;
   }
+  L.mic = infoMicrofon(L.flux);
+  L.zgomot = setari.zgomot === 'auto' || !setari.zgomot ? (L.mic.casti ? 'near_field' : 'far_field') : setari.zgomot;
+  L.diag.microfon = L.mic;
+  L.diag.setare_microfon = setari.zgomot;
   pornesteAnaliza();
   try {
     await conecteaza([]);
@@ -1454,10 +1903,14 @@ async function pornesteLectia(opt) {
   L.inceput = Date.now();
   seteazaStare(L.mod === 'test' ? 'Examinatorul începe…' : 'Profesorul începe…', 'vorbeste');
   tineEcranul();
+  setTimeout(() => { try { if (L.diag && window.Aplicatie && window.Aplicatie.audio) L.diag.nativ_in_lectie = JSON.parse(window.Aplicatie.audio()); } catch (e) { /* nu e APK */ } }, 8000);
   if ('mediaSession' in navigator && window.MediaMetadata) navigator.mediaSession.metadata = new MediaMetadata({ title: L.mod === 'test' ? 'English speaking test' : 'English lesson', artist: 'English' });
   L.ceas = setInterval(() => {
     const c = $('#ceas'); if (c) c.textContent = durata((Date.now() - L.inceput) / 1000);
     const k = $('#cost'); if (k) k.textContent = dolari(L.cost);
+    actualizeazaTimpPas();
+    verificaTimpulPasului();
+    golesteCoadaApp();
   }, 1000);
   L.salvare = setInterval(salveazaLocal, 20000);
 }
@@ -1467,9 +1920,42 @@ function oprireTehnica() {
   L.pc = null; L.dc = null; L.flux = null; L.anMic = null; L.anProf = null;
   cancelAnimationFrame(L.rafId);
   clearInterval(L.ceas); clearInterval(L.salvare);
+  if (L.inchidere) { clearInterval(L.inchidere); L.inchidere = null; }
   if (L.wake) { L.wake.release().catch(() => {}); L.wake = null; }
   if (window.Aplicatie && window.Aplicatie.ecranAprins) window.Aplicatie.ecranAprins(false);
   const s = $('#sunet'); if (s) s.srcObject = null;
+}
+function blocVerificareFinal(v, plan, lid) {
+  const x = v && (v.cea_mai_buna || (v.itemi.length ? { itemi: v.itemi } : null));
+  if (!x) {
+    return '<div class="cefr-cerc mare gol-cerc">?</div><h2>Lecție terminată, fără verificare</h2><p class="text-2">Lecția se bifează doar după verificarea finală: minim ' + plan.prag + ' din ' + plan.total + '.</p>' +
+      '<a class="buton principal" href="#/test/verificare-' + esc(lid) + '">' + ICON.fulger + ' Fă verificarea acum (2 min)</a>';
+  }
+  const c = x.itemi.filter((i) => i.corect).length, ok = c >= plan.prag;
+  return '<div class="cefr-cerc mare' + (ok ? '' : ' slab') + '">' + c + '/' + plan.total + '</div><h2>' + (ok ? 'Lecție trecută' : x.itemi.length < plan.total ? 'Verificare neterminată' : 'Încă nu e trecută') + '</h2>' +
+    (ok ? '<p class="bine">' + ICON.bifa + ' Bifată. Data viitoare începi lecția următoare.</p>' : '<p class="text-2">Îți trebuie ' + plan.prag + ' din ' + plan.total + '.</p>') +
+    '<ul class="verif-lista">' + x.itemi.map((i) => '<li class="' + (i.corect ? 'ok' : 'gresit') + '"><b>' + (i.corect ? '✓' : '✗') + '</b><span>' + esc((plan.verificare[i.nr - 1] || {}).ro || 'Sarcina ' + i.nr) +
+      (i.a_spus ? '<small>Ai spus: „' + esc(i.a_spus) + '”</small>' : '') + (!i.corect && i.varianta_buna ? '<small class="bine">' + esc(i.varianta_buna) + '</small>' : '') + '</span></li>').join('') + '</ul>' +
+    (ok ? '' : '<a class="buton principal" href="#/test/verificare-' + esc(lid) + '">' + ICON.fulger + ' Reia verificarea (2 min)</a>');
+}
+async function asteaptaEvaluarea(id, n) {
+  const el = $('#nivel-calcul');
+  if (!el) return;
+  let l = null;
+  try { l = await api('/api/engleza/lectie?id=' + encodeURIComponent(id)); } catch (e) { l = null; }
+  const ev = l && l.evaluare;
+  if (!$('#nivel-calcul')) return;
+  if (ev && ev.cefr) {
+    const c = $('.final-test .cefr-cerc'); if (c) { c.textContent = ev.cefr; c.classList.remove('pulseaza', 'gol-cerc'); }
+    const h = $('.final-test h2'); if (h) h.textContent = 'Nivelul tău vorbit: ' + ev.cefr;
+    $('#nivel-calcul').outerHTML = blocEvaluare(ev);
+    confetti();
+    incarcaStare().catch(() => {});
+    return;
+  }
+  if (ev && ev.eroare) { el.textContent = 'N-am putut calcula nivelul: ' + ev.eroare; return; }
+  if (n > 60) { el.textContent = 'Durează mai mult ca de obicei. Îl găsești în Istoric când e gata.'; return; }
+  setTimeout(() => asteaptaEvaluarea(id, n + 1), 5000);
 }
 async function terminaLectia(fortat) {
   if (L.faza !== 'live') return;
@@ -1479,37 +1965,45 @@ async function terminaLectia(fortat) {
   const durataS = Math.round((Date.now() - L.inceput) / 1000);
   oprireTehnica();
   document.body.classList.remove('in-lectie');
-  const sesiune = { transcript: L.transcript, durata_s: durataS, cost_usd: Math.round(L.cost * 10000) / 10000, mod: L.mod, drum: S.drum, raport_test: L.raport };
+  const sesiune = { transcript: L.transcript, durata_s: durataS, cost_usd: Math.round(L.cost * 10000) / 10000, mod: L.mod, drum: S.drum, raport_test: L.raport,
+    verificare: verificareDeSalvat(), diagnostic: diagnosticDeSalvat(durataS) };
   if (L.saptamana !== null) sesiune.saptamana = L.saptamana;
   sesiune.unitate = L.saptamana !== null ? L.saptamana : (S.stare && S.stare.saptamana) || undefined;
   if (L.lectie) sesiune.lectie = L.lectie;
-  let notaLectie = '';
-  if (L.lectie && L.mod !== 'test') {
-    const p = pragLectie();
-    const inainte = [S.stare && S.stare.lectia].concat((S.stare && S.stare.lectii_unitate) || []).find((x) => x && x.id === L.lectie);
-    const tot = ((inainte && inainte.minute) || 0) + Math.round(durataS / 60);
-    notaLectie = (inainte && inainte.facuta) || tot >= p.min ? '<p class="bine">' + ICON.bifa + ' Lecția „' + esc(L.lectieTitlu || '') + '” e bifată.</p>'
-      : '<p class="text-2">Lecția „' + esc(L.lectieTitlu || '') + '”: ' + tot + ' din ' + p.min + ' minute. Data viitoare continui de unde ai rămas.</p>';
-  } else if (L.mod === 'test' && L.raport && L.raport.cefr && S.stare && S.stare.curriculum && (S.stare.curriculum.facute || 0) < 3) {
-    notaLectie = '<p class="text-2">Îți potrivesc lecțiile și pe rezultatul ăsta, în câteva minute.</p>';
-  }
+  const lectieFinal = L.lectie, planFinal = L.plan, verifFinal = L.verif, modFinal = L.mod;
+  const vorbiteDeEl = L.transcript.filter((t) => t.de === 'eu').length;
   L.faza = 'oprit';
   const minuteNoi = Math.round(durataS / 60);
-  $('#main').innerHTML = '<div class="final-test">' + (L.raport && L.raport.cefr ? raportScoruri(L.raport) : inel(Math.min(1, minuteNoi / Math.max(5, setari.obiectiv)), durata(durataS), 'minute')) +
-    '<h2>' + (L.mod === 'test' ? (L.raport ? 'Testul s-a încheiat' : 'Test oprit înainte de final') : 'Lecție terminată') + '</h2><p class="text-2">' + (minuteNoi ? '+' + minuteNoi + ' XP · ' : '') + dolari(L.cost) + '</p>' + notaLectie + '<p class="text-2" id="mesaj-final">Salvez și pregătesc rezumatul…</p>' +
+  const costAzi = ((S.stare && S.stare.cost_azi_usd) || 0) + L.cost;
+  let sus;
+  if (modFinal === 'test') {
+    sus = '<div class="cefr-cerc mare gol-cerc pulseaza">…</div><h2>' + (L.raport ? 'Testul s-a încheiat' : 'Test oprit înainte de final') + '</h2>' +
+      '<p class="text-2" id="nivel-calcul">' + (vorbiteDeEl >= 6 ? 'Îți calculez nivelul vorbit, strict, din tot ce ai spus. Durează 2–3 minute; dacă închizi, îl găsești în Istoric.' : 'Ai vorbit prea puțin ca să-ți calculez nivelul.') + '</p>';
+  } else if (planFinal) {
+    sus = blocVerificareFinal(verifFinal, planFinal, lectieFinal);
+  } else {
+    sus = inel(Math.min(1, minuteNoi / Math.max(5, setari.obiectiv)), durata(durataS), 'minute') + '<h2>Lecție terminată</h2>';
+  }
+  $('#main').innerHTML = '<div class="final-test">' + sus +
+    '<p class="text-2">' + (minuteNoi ? '+' + minuteNoi + ' XP · ' : '') + durata(durataS) + ' · ' + dolari(L.cost) + ' · azi ' + dolari(costAzi) + '</p>' +
+    '<p class="text-2" id="mesaj-final">Salvez…</p>' + blocFeedback(modFinal === 'test' ? 'Cum a fost testul?' : 'Cum a fost lecția?') +
     '<div class="butoane-col"><a class="buton principal" href="#/acasa">Acasă</a></div></div>';
-  if (L.raport || minuteNoi >= 10) confetti();
+  let idSesiune = null;
+  legaFeedback(() => ({ sesiune: idSesiune || undefined, lectie: lectieFinal || undefined, ecran: modFinal === 'test' ? 'final_test' : 'final_lectie' }));
+  if (modFinal !== 'test' && verifFinal && verifFinal.trecuta) confetti();
   history.replaceState(null, '', '#/acasa');
-  if (!L.transcript.some((t) => t.de === 'eu')) {
+  if (!vorbiteDeEl) {
     localStorage.removeItem(CHEIE_LECTIE);
     $('#mesaj-final').textContent = 'Sesiunea a fost prea scurtă ca s-o salvez.';
     return;
   }
   try {
     const r = await api('/api/engleza/lectie', { method: 'POST', body: sesiune });
+    idSesiune = r.id;
     localStorage.removeItem(CHEIE_LECTIE);
     $('#mesaj-final').innerHTML = 'Salvat. <a href="#/lectie/' + esc(r.id) + '">Vezi rezumatul</a> (gata în câteva secunde).';
     incarcaStare().catch(() => {});
+    if (modFinal === 'test' && vorbiteDeEl >= 6) setTimeout(() => asteaptaEvaluarea(r.id, 0), 15000);
   } catch (e) {
     salveazaLocal();
     $('#mesaj-final').textContent = 'N-am putut salva acum (' + e.message + '). O salvez singur la următoarea deschidere.';
@@ -1605,20 +2099,24 @@ function foaieSetari() {
     '<label class="setare"><span>Obiectivul zilnic</span><select id="obiectiv">' + [15, 30, 45, 60, 90, 120].map((m) => '<option value="' + m + '"' + (setari.obiectiv === m ? ' selected' : '') + '>' + m + ' minute pe zi</option>').join('') + '</select></label>' +
     '<label class="setare"><span>Viteza profesorului <b id="viteza-val">' + setari.viteza.toFixed(2) + '×</b></span><input type="range" id="viteza" min="0.8" max="1.2" step="0.05" value="' + setari.viteza + '"></label>' +
     '<label class="setare"><span>Te așteaptă când faci pauze</span><select id="rabdare"><option value="low"' + (setari.rabdare === 'low' ? ' selected' : '') + '>mult (recomandat)</option><option value="medium"' + (setari.rabdare === 'medium' ? ' selected' : '') + '>normal</option></select></label>' +
-    '<label class="setare"><span>Microfonul</span><select id="zgomot"><option value="far_field"' + (setari.zgomot === 'far_field' ? ' selected' : '') + '>telefonul în suport sau pe masă</option><option value="near_field"' + (setari.zgomot === 'near_field' ? ' selected' : '') + '>căști cu microfon</option></select></label>' +
+    '<label class="setare"><span>Microfonul</span><select id="zgomot"><option value="auto"' + (setari.zgomot === 'auto' ? ' selected' : '') + '>automat: recunosc căștile (recomandat)</option><option value="near_field"' + (setari.zgomot === 'near_field' ? ' selected' : '') + '>căști cu microfon</option><option value="far_field"' + (setari.zgomot === 'far_field' ? ' selected' : '') + '>telefonul în suport sau pe masă</option></select></label>' +
+    '<div class="setare"><span>Te aude bine?</span><small class="mic">Citești o propoziție și vezi cât de clar te prinde, cu căștile și fără.</small><button class="buton mic-b" id="test-mic">' + ICON.mic + ' Testează microfonul</button></div>' +
     '<label class="setare comutator"><input type="checkbox" id="ecran"' + (setari.ecran ? ' checked' : '') + '><span>Ține ecranul aprins în timpul lecției</span></label>' +
     '<label class="setare comutator"><input type="checkbox" id="subtitrari"' + (setari.subtitrari ? ' checked' : '') + '><span>Arată textul conversației în lecție</span></label>' +
     '<label class="setare"><span>Ținta</span><select id="tinta"><option value="">automat: nivelul următor</option>' + ['B1', 'B2', 'C1'].map((t) => '<option value="' + t + '"' + (setari.tinta === t ? ' selected' : '') + '>' + t + '</option>').join('') + '</select></label>' +
     '<div class="setare"><span>Programul de 20 de săptămâni</span><small class="mic">' + (S.stare && S.stare.program ? new Date(S.stare.program.inceput).toLocaleDateString('ro-RO', { day: 'numeric', month: 'long' }) + ' – ' + new Date(S.stare.program.sfarsit).toLocaleDateString('ro-RO', { day: 'numeric', month: 'long', year: 'numeric' }) : '') + '</small><button class="buton mic-b" id="reporneste">Repornește programul de azi</button></div>' +
     '<div class="setare"><span>Cele 100 de lecții</span><small class="mic">' + (S.stare && S.stare.curriculum && S.stare.curriculum.are_lectii ? facute(S.stare.curriculum.facute) + ' din ' + S.stare.curriculum.total + ' · potrivite pe ' + esc(nivelCurs(S.stare.curriculum.nivel)) : 'apar după testul de nivel') + '</small>' +
     (S.stare && (S.stare.are_nivel || (S.stare.curriculum && S.stare.curriculum.are_lectii)) ? '<button class="buton mic-b" id="refa-curs">Refă lecțiile pe nivelul de acum</button>' : '') + '</div>' +
-    '<p class="mic">Luna asta: ' + dolari((S.stare && S.stare.cost_luna_usd) || 0) + ' la OpenAI. Modelul: ' + esc((S.stare && S.stare.model) || '') + '.</p>' +
+    '<div class="setare"><span>Ceva nu merge cum trebuie?</span><small class="mic">Scrie-mi aici; citesc tot înainte să lucrez la aplicație.</small><button class="buton mic-b" id="parere">Spune-mi ce să îmbunătățesc</button></div>' +
+    '<p class="mic">OpenAI: azi ' + dolari((S.stare && S.stare.cost_azi_usd) || 0) + ' · luna asta ' + dolari((S.stare && S.stare.cost_luna_usd) || 0) + '. Lecțiile scurte costă mai puțin pe minut: la fiecare replică, profesorul recitește toată conversația de până atunci. Modelul: ' + esc((S.stare && S.stare.model) || '') + ' · versiunea ' + VERSIUNE_APP + '.</p>' +
     '<button class="buton principal lat" id="inchide-setari">Gata</button>',
   () => {
     $('#obiectiv').onchange = (e) => { setari.obiectiv = Number(e.target.value); salveazaSetari(); };
     $('#viteza').oninput = (e) => { setari.viteza = Number(e.target.value); $('#viteza-val').textContent = setari.viteza.toFixed(2) + '×'; salveazaSetari(); };
     $('#rabdare').onchange = (e) => { setari.rabdare = e.target.value; salveazaSetari(); };
     $('#zgomot').onchange = (e) => { setari.zgomot = e.target.value; salveazaSetari(); };
+    $('#test-mic').onclick = () => { inchideStrat(); setTimeout(foaieTestMicrofon, 30); };
+    $('#parere').onclick = () => { inchideStrat(); setTimeout(foaieFeedback, 30); };
     $('#ecran').onchange = (e) => { setari.ecran = e.target.checked; salveazaSetari(); };
     $('#subtitrari').onchange = (e) => { setari.subtitrari = e.target.checked; salveazaSetari(); };
     $('#tinta').onchange = (e) => { setari.tinta = e.target.value || undefined; salveazaSetari(); };

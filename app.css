@@ -557,3 +557,62 @@ body.in-lectie .toast { bottom: calc(20px + env(safe-area-inset-bottom)); }
 .nod-lectie.facuta { fill: var(--lime); stroke: var(--lime); }
 .lectia-azi .butoane .buton { white-space: nowrap; padding: 10px 12px; }
 .lectia-azi .butoane .buton.principal { flex: 1.5; }
+
+/* 1.5 (24.11): pașii lecției pe ecran, verificarea finală, părerea ta, testul de microfon, nivelul evaluat strict */
+.orb-live { background: none; border: 0; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; color: inherit; }
+.live.cu-pasi .orb-live { width: 170px; height: 170px; margin: 10px 0 6px; }
+.pasi-live { width: 100%; margin-top: 10px; }
+.pasi-sir { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.pas-chip { display: grid; justify-items: center; gap: 4px; padding: 8px 2px 7px; border-radius: 12px; background: var(--card); border: 1px solid var(--linie); color: var(--text-3); font-size: 11px; line-height: 1.15; cursor: pointer; min-width: 0; }
+.pas-chip span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pas-chip b { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font: 600 12px 'Rubik', sans-serif; background: var(--card-2); border: 1px solid var(--linie-2); color: var(--text-2); }
+.pas-chip b svg { width: 13px; height: 13px; }
+.pas-chip.activ { border-color: var(--lime); color: var(--text); background: var(--lime-fond); }
+.pas-chip.activ b { background: var(--lime); border-color: var(--lime); color: #0D1C2B; }
+.pas-chip.gata { color: var(--text-2); }
+.pas-chip.gata b { background: var(--lime-fond); border-color: var(--lime-adanc); color: var(--lime-2); }
+#pas-timp { margin: 6px 0 0; }
+.verif-live { width: 100%; margin-top: 8px; padding: 12px 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--linie); }
+.verif-live .rand { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.verif-puncte { display: flex; gap: 8px; justify-content: center; margin: 10px 0 6px; }
+.verif-puncte span { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font: 600 14px 'Rubik', sans-serif; background: var(--card-2); border: 1px solid var(--linie-2); color: var(--text-3); }
+.verif-puncte span.ok { background: var(--lime-fond); border-color: var(--lime); color: var(--lime-2); }
+.verif-puncte span.gresit { background: var(--rau-fond); border-color: var(--rau); color: var(--rau); }
+.verif-live p { margin: 4px 0; }
+.final-live { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--linie); text-align: center; }
+.final-live.bine b { color: var(--lime-2); }
+.final-live .butoane { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
+.subtitrari .neclar::after { content: ' · neclar'; color: var(--aur); font-size: 12px; }
+.subtitrari .contestat { text-decoration: line-through; opacity: 0.6; }
+.verif-lista { list-style: none; padding: 0; margin: 10px 0; width: 100%; text-align: left; display: grid; gap: 8px; }
+.verif-lista li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--linie); }
+.verif-lista li > b { font: 600 16px 'Rubik', sans-serif; }
+.verif-lista li.ok > b { color: var(--lime-2); }
+.verif-lista li.gresit > b { color: var(--rau); }
+.verif-lista small { display: block; color: var(--text-3); margin-top: 3px; }
+.verif-lista small.bine { color: var(--lime-2); }
+.cefr-cerc.slab { background: radial-gradient(circle at 35% 30%, #FBE3BA, var(--aur) 55%, #B47A26); box-shadow: 0 10px 28px rgba(242, 180, 90, 0.3); }
+.cefr-cerc.gol-cerc { background: var(--card-2); color: var(--text-2); box-shadow: none; border: 1px solid var(--linie-2); }
+.feedback-bloc { width: 100%; text-align: left; margin-top: 14px; }
+.feedback-bloc h3 { margin: 0 0 2px; }
+.chips.alege .chip { cursor: pointer; font-size: 13.5px; padding: 7px 12px; }
+.chips.alege .chip.ales { background: var(--lime-fond); border-color: var(--lime); color: var(--text); }
+.feedback-bloc textarea, .foaie-jos textarea { width: 100%; margin: 8px 0; min-height: 52px; resize: vertical; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--linie-2); background: var(--card-2); }
+.evaluare { width: 100%; text-align: left; }
+.criterii { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 8px 0 12px; }
+.criteriu { display: grid; justify-items: center; gap: 2px; padding: 8px 2px; border-radius: 12px; background: var(--card); border: 1px solid var(--linie); min-width: 0; }
+.criteriu span { font-size: 11px; color: var(--text-3); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.criteriu b { font: 600 16px 'Rubik', sans-serif; }
+.verif-sesiune { margin: 10px 0; }
+.pasi-foaie, .verif-foaie { padding-left: 20px; margin: 6px 0 4px; display: grid; gap: 6px; }
+.pasi-foaie small { display: block; color: var(--text-3); }
+.chat-actiuni { display: flex; gap: 6px; align-items: center; }
+.tm-rez { margin: 12px 0; }
+.tm-scor { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; background: var(--card-2); border: 1px solid var(--linie-2); }
+.tm-scor b { font: 600 28px 'Rubik', sans-serif; }
+.tm-scor.bine b { color: var(--lime-2); }
+.tm-scor.rau b { color: var(--rau); }
+.tm-cuvinte { line-height: 1.7; }
+.tm-cuvinte span.lipsa { color: var(--rau); text-decoration: underline dotted; }
+@media (max-width: 380px) { .criterii { grid-template-columns: repeat(3, 1fr); } .pas-chip { font-size: 10px; } }
+.bine svg, .final-live b svg, .verif-sesiune b svg, .card p.mic svg { width: 18px; height: 18px; vertical-align: -3px; flex: none; }
