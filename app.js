@@ -17,8 +17,8 @@ const gol = (x) => x === null || x === undefined || (typeof x === 'number' && is
 
 let cfg = null;
 try { cfg = JSON.parse(localStorage.getItem(CHEIE_CFG) || 'null'); } catch (e) { cfg = null; }
-const VERSIUNE_APP = '1.5.1';
-let setari = { mod: 'lectie', viteza: 0.95, rabdare: 'low', zgomot: 'auto', ecran: true, subtitrari: false, obiectiv: 30 };
+const VERSIUNE_APP = '1.7';
+let setari = { mod: 'lectie', viteza: 0.95, rabdare: 'low', zgomot: 'auto', ecran: true, subtitrari: false, obiectiv: 30, vorbire: 'buton' };
 try { Object.assign(setari, JSON.parse(localStorage.getItem(CHEIE_SETARI) || '{}')); } catch (e) { /* implicite */ }
 function salveazaSetari() { try { localStorage.setItem(CHEIE_SETARI, JSON.stringify(setari)); } catch (e) { /* ignor */ } }
 // 1.5: microfonul se alege singur (recunosc căștile); „telefonul pe masă” era doar valoarea implicită veche
@@ -1401,23 +1401,27 @@ const L = {
   ac: null, anMic: null, anProf: null, buf: null, rafId: 0, stare: '',
   plan: null, pas: 0, pasInceput: 0, nudge: {}, verif: null, raspunsActiv: false, audioProf: false, vorbeste: false,
   coadaApp: [], inchidere: null, asteaptaFinal: false, rolNote: 'system', diag: null, zgomot: 'far_field', mic: null,
+  vorbire: 'buton', inreg: null, raspunsDatorat: false,
 };
 const NUME_PAS_SCURT = ['Încălzire', 'Ce înveți', 'Exersezi', 'Situația', 'Verificarea'];
 function secundeLive() { return L.inceput ? Math.round((Date.now() - L.inceput) / 1000) : 0; }
 function diagNou() {
   return { versiune: VERSIUNE_APP, segmente: 0, scurte: 0, lp: [], neclare: 0, nu_am_zis: [], raspunsuri: 0, opriri: 0, vorbiri: 0,
-    tokeni: { ain: 0, ain_cache: 0, aout: 0, tin: 0, tin_cache: 0, tout: 0 }, pasi: [], note_app: 0, erori: [] };
+    tokeni: { ain: 0, ain_cache: 0, aout: 0, tin: 0, tin_cache: 0, tout: 0 }, pasi: [], note_app: 0, erori: [],
+    apasari: 0, intreruperi: 0, anulate: 0, prea_scurte: 0, secunde_vorbite: 0, niveluri: [] };
 }
 function ecranLive() {
-  const examen = L.mod === 'test';
+  const examen = L.mod === 'test', cuButon = L.vorbire === 'buton';
   $('#main').innerHTML = '<div class="live' + (examen ? ' examen' : '') + (L.plan ? ' cu-pasi' : '') + '">' +
     '<div class="live-sus"><span class="eticheta-live">' + (examen ? 'Test vorbit' : (L.numeScenariu ? 'Simulare · ' + esc(L.numeScenariu) : (L.lectieTitlu ? 'Lecția · ' + esc(L.lectieTitlu) : NUME_MOD[L.mod]))) + (L.saptamana !== null ? ' · săpt. ' + L.saptamana : '') + '</span><span class="mic"><span id="ceas">0:00</span> · <span id="cost">$0.00</span></span></div>' +
     '<div class="pasi-live" id="pasi-live" hidden></div>' +
-    '<button class="orb-live" id="orb" aria-label="Oprește profesorul"><span class="orb-halou"></span><span class="orb-corp"></span></button>' +
-    '<p class="stare" id="stare">Mă conectez…</p><p class="mic centru" id="sub-stare">' + (examen ? 'Fără corecturi în timpul testului. Nivelul îl calculez la final, din tot ce ai spus.' : 'Vorbește liber. Ca să-l oprești când vorbește, atinge cercul.') + '</p>' +
+    '<button class="orb-live" id="orb" aria-label="' + (cuButon ? 'Apasă și vorbește' : 'Oprește profesorul') + '"><span class="orb-halou"></span><span class="orb-corp"></span></button>' +
+    '<p class="stare" id="stare">Mă conectez…</p><p class="mic centru" id="sub-stare">' + (cuButon ? (examen ? 'Fără corecturi în timpul testului. Apeși butonul, vorbești, apeși din nou ca să trimiți.' : 'Apeși butonul, spui tot ce vrei, apeși din nou și abia atunci pleacă. Nu te mai întrerupe.') : (examen ? 'Fără corecturi în timpul testului. Nivelul îl calculez la final, din tot ce ai spus.' : 'Vorbește liber. Ca să-l oprești când vorbește, atinge cercul.')) + '</p>' +
+    '<p class="mic centru aviz-casti" id="aviz-casti" hidden></p>' +
     '<div class="verif-live" id="verif-live" hidden></div>' +
+    (cuButon ? '<div class="vorbit"><button class="buton principal lat vorbit-buton" id="vorbit">' + ICON.mic + ' Apasă și vorbește</button><button class="buton-text" id="vorbit-anuleaza" hidden>Anulează, nu trimite</button></div>' : '') +
     '<div class="comenzi">' +
-    '<button class="buton" id="mut">' + ICON.mic + ' Microfon</button>' +
+    (cuButon ? '' : '<button class="buton" id="mut">' + ICON.mic + ' Microfon</button>') +
     '<button class="buton" id="nu-am-zis">Nu asta am zis</button>' +
     '<button class="buton" id="rar">Mai rar</button>' +
     (examen ? '<button class="buton" id="text-buton">Text</button>' : '<button class="buton" id="urmatorul">' + (L.plan ? 'Pasul următor' : 'Recap') + '</button>') +
@@ -1426,10 +1430,11 @@ function ecranLive() {
     '<button class="buton pericol lat" id="termina">' + (examen ? 'Oprește testul' : 'Termină lecția') + '</button>' +
     (examen ? '' : '<button class="buton-text" id="arata-text">' + (setari.subtitrari ? 'Ascunde textul' : 'Arată textul conversației') + '</button>') +
     '</div>';
-  $('#mut').onclick = comutaMut;
+  const mb = $('#mut'); if (mb) mb.onclick = comutaMut;
   $('#rar').onclick = () => schimbaViteza(-0.1);
   $('#nu-am-zis').onclick = nuAstaAmZis;
-  $('#orb').onclick = opresteProfesorul;
+  $('#orb').onclick = cuButon ? comutaVorbitul : opresteProfesorul;
+  if (cuButon) { $('#vorbit').onclick = comutaVorbitul; $('#vorbit-anuleaza').onclick = anuleazaVorbitul; deseneazaButonVorbit(); }
   const urm = $('#urmatorul'); if (urm) urm.onclick = () => (L.plan ? pasulUrmator() : trimiteText('recap'));
   const tb = $('#text-buton') || $('#arata-text');
   if (tb) tb.onclick = () => {
@@ -1442,6 +1447,7 @@ function ecranLive() {
   if (L.plan) { deseneazaPasii(); deseneazaVerificarea(); }
 }
 function seteazaStare(text, clasa) {
+  if (text === 'Rândul tău' && L.vorbire === 'buton') text = 'Rândul tău: apasă și vorbește';
   L.stare = clasa || '';
   const el = $('#stare'); if (el) el.textContent = text;
   const o = $('#orb'); if (o) o.className = 'orb-live ' + (clasa || '');
@@ -1653,6 +1659,109 @@ function anuleazaInchiderea() {
   const t = $('#inchide-in'); if (t) t.textContent = 'Rămânem. Termini când vrei.';
 }
 
+/* --- 1.7 (24.11): vorbești cu butonul. Pe căști, profesorul decidea singur când ai terminat și te tăia la jumătatea
+   propoziției. Acum apeși, spui tot ce vrei, apeși din nou și abia atunci pleacă replica. Între apăsări microfonul e oprit. */
+function ceRaspuns() { // răspunsul profesorului: acum sau imediat ce se poate (nu peste vorbitul tău și nu peste alt răspuns)
+  if (L.inreg || L.raspunsActiv || L.judecari > 0 || !L.dc || L.dc.readyState !== 'open') { L.raspunsDatorat = true; return; }
+  L.raspunsDatorat = false;
+  trimiteEveniment({ type: 'response.create' });
+  L.raspunsActiv = true;
+}
+function comutaVorbitul() {
+  if (L.faza !== 'live' || L.vorbire !== 'buton') return;
+  if (L.inreg) { if (!L.inreg.trimit) trimiteVorbitul(); return; }
+  incepeVorbitul();
+}
+function incepeVorbitul() {
+  if (!L.dc || L.dc.readyState !== 'open') { toast('Încă mă conectez. Apasă din nou în câteva secunde.'); return; }
+  if (L.inchidere) anuleazaInchiderea();
+  const peste = L.raspunsActiv || L.audioProf;
+  if (L.raspunsActiv) trimiteEveniment({ type: 'response.cancel' });
+  if (L.audioProf) trimiteEveniment({ type: 'output_audio_buffer.clear' });
+  L.audioProf = false;
+  trimiteEveniment({ type: 'input_audio_buffer.clear' });
+  L.inreg = { start: Date.now(), trimit: false, nivelMax: 0, ceas: null };
+  L.vorbeste = true;
+  if (L.flux) L.flux.getAudioTracks().forEach((t) => { t.enabled = true; });
+  if (L.diag) { L.diag.apasari += 1; if (peste) L.diag.intreruperi += 1; }
+  seteazaStare('Te ascult… apasă când ai terminat', 'asculta');
+  deseneazaButonVorbit();
+  L.inreg.ceas = setInterval(() => {
+    if (L.inreg && !L.inreg.trimit && Date.now() - L.inreg.start > 120000) { toast('Două minute: trimit ce ai spus.'); trimiteVorbitul(); return; }
+    deseneazaButonVorbit();
+  }, 500);
+}
+function trimiteVorbitul() {
+  const r = L.inreg;
+  if (!r || r.trimit) return;
+  r.trimit = true;
+  clearInterval(r.ceas);
+  const sec = (Date.now() - r.start) / 1000;
+  seteazaStare('Trimit…', 'gandeste');
+  deseneazaButonVorbit();
+  // microfonul mai ține 0,3 s (ultima silabă), apoi încă 0,25 s până ajunge sunetul la OpenAI; abia apoi pleacă replica
+  setTimeout(() => {
+    if (L.inreg === r && L.flux) L.flux.getAudioTracks().forEach((t) => { t.enabled = false; });
+    setTimeout(() => {
+      if (L.inreg !== r) return; // anulată sau legătura a căzut între timp
+      L.inreg = null; L.vorbeste = false;
+      if (L.faza !== 'live' || !L.dc || L.dc.readyState !== 'open') { deseneazaButonVorbit(); return; }
+      if (sec < 0.8) { // atingere scăpată, nu replică
+        trimiteEveniment({ type: 'input_audio_buffer.clear' });
+        if (L.diag) L.diag.prea_scurte += 1;
+        toast('Prea scurt. Apasă, vorbește, apoi apasă din nou.');
+        seteazaStare('Rândul tău', 'asteapta');
+        deseneazaButonVorbit();
+        if (L.raspunsDatorat) ceRaspuns();
+        setTimeout(golesteCoadaApp, 300);
+        return;
+      }
+      trimiteEveniment({ type: 'input_audio_buffer.commit' });
+      L.intrari = (L.intrari || 0) + 1;
+      if (L.diag) {
+        L.diag.vorbiri += 1;
+        L.diag.secunde_vorbite = Math.round((L.diag.secunde_vorbite + sec) * 10) / 10;
+        if (L.diag.niveluri.length < 40) L.diag.niveluri.push(Math.round((r.nivelMax || 0) * 1000) / 1000);
+      }
+      seteazaStare('Se gândește…', 'gandeste');
+      deseneazaButonVorbit();
+      ceRaspuns();
+    }, 250);
+  }, 300);
+}
+function anuleazaVorbitul() {
+  const r = L.inreg;
+  if (!r || r.trimit) return;
+  abandoneazaVorbitul();
+  trimiteEveniment({ type: 'input_audio_buffer.clear' });
+  if (L.diag) L.diag.anulate += 1;
+  seteazaStare('Rândul tău', 'asteapta');
+  toast('Anulat. Apasă când vrei să spui din nou.');
+  if (L.raspunsDatorat) ceRaspuns();
+  setTimeout(golesteCoadaApp, 300);
+}
+function abandoneazaVorbitul() { // fără nimic trimis (anulare sau legătură căzută)
+  if (L.inreg) clearInterval(L.inreg.ceas);
+  L.inreg = null; L.vorbeste = false;
+  if (L.flux && L.vorbire === 'buton') L.flux.getAudioTracks().forEach((t) => { t.enabled = false; });
+  deseneazaButonVorbit();
+}
+function deseneazaButonVorbit() {
+  const b = $('#vorbit');
+  if (!b) return;
+  const r = L.inreg, inreg = !!(r && !r.trimit), stare = inreg ? 'inreg' : (r ? 'trimit' : 'gata');
+  // conținutul se refă doar când se schimbă starea, nu la fiecare secundă: o atingere care prindea redesenarea se pierdea
+  if (b.dataset.stare !== stare) {
+    b.dataset.stare = stare;
+    b.classList.toggle('inregistreaza', inreg);
+    b.classList.toggle('principal', !inreg);
+    b.disabled = stare === 'trimit';
+    b.innerHTML = inreg ? '<span class="punct-rosu"></span><span class="vorbit-text"></span>' : (r ? '<span class="vorbit-text">Trimit…</span>' : ICON.mic + '<span class="vorbit-text">Apasă și vorbește</span>');
+    const a = $('#vorbit-anuleaza'); if (a) a.hidden = !inreg;
+  }
+  if (inreg) { const t = b.querySelector('.vorbit-text'); if (t) t.textContent = 'Gata, trimite · ' + durata((Date.now() - r.start) / 1000); }
+}
+
 /* --- notele aplicației către profesor, „Nu asta am zis”, oprirea profesorului */
 function notaApp(text) {
   L.coadaApp.push(text);
@@ -1663,7 +1772,7 @@ function golesteCoadaApp() {
   const text = L.coadaApp.shift();
   trimiteEveniment({ type: 'conversation.item.create', item: { type: 'message', role: L.rolNote, content: [{ type: 'input_text', text: '[APP] ' + text }] } });
   trimiteEveniment({ type: 'response.create' });
-  L.raspunsActiv = true;
+  L.raspunsActiv = true; L.raspunsDatorat = false;
   if (L.diag) L.diag.note_app += 1;
 }
 function opresteProfesorul() {
@@ -1714,8 +1823,7 @@ async function judecaSiRaspunde(a, callId) {
   const out = notaVerificare(b);
   if (dinServer && out.ok) { out.verdict = j.corect ? 'correct' : 'not quite'; out.say = j.corect ? 'Correct.' : 'Not quite: ' + b.varianta_buna; }
   trimiteEveniment({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(out) } });
-  trimiteEveniment({ type: 'response.create' });
-  L.raspunsActiv = true;
+  ceRaspuns(); // dacă vorbește chiar acum (butonul), răspunsul pleacă după ce trimite
 }
 
 /* --- funcțiile apelate de profesor (doar la response.done, ca să nu pornim un răspuns peste altul) */
@@ -1760,7 +1868,7 @@ function laEveniment(ev) {
     case 'output_audio_buffer.stopped':
     case 'output_audio_buffer.cleared':
       L.audioProf = false;
-      if (!L.raspunsActiv) seteazaStare(L.mut ? 'Microfonul e oprit' : 'Rândul tău', L.mut ? 'mut' : 'asteapta');
+      if (!L.raspunsActiv && !L.inreg) seteazaStare(L.mut ? 'Microfonul e oprit' : 'Rândul tău', L.mut ? 'mut' : 'asteapta');
       setTimeout(golesteCoadaApp, 300);
       break;
     case 'response.done': {
@@ -1769,10 +1877,11 @@ function laEveniment(ev) {
       L.cost += costDin(r.usage);
       if (L.diag) L.diag.raspunsuri += 1;
       let continua = false;
-      (r.output || []).forEach((o) => { if (o && o.type === 'function_call' && laApelFunctie(o.name, o.call_id, o.arguments)) continua = true; });
-      if (continua && !(L.judecari > 0)) { trimiteEveniment({ type: 'response.create' }); L.raspunsActiv = true; }
+      // 1.7: un apel tăiat la jumătate (l-ai întrerupt) nu se execută; argumentele lui sunt incomplete
+      (r.output || []).forEach((o) => { if (o && o.type === 'function_call' && o.status !== 'incomplete' && laApelFunctie(o.name, o.call_id, o.arguments)) continua = true; });
+      if (continua || L.raspunsDatorat) ceRaspuns();
       else if (L.asteaptaFinal && r.status === 'completed') { L.asteaptaFinal = false; arataFinalLive(); }
-      if (!L.raspunsActiv && !L.audioProf && !(L.judecari > 0)) seteazaStare(L.mut ? 'Microfonul e oprit' : 'Rândul tău', L.mut ? 'mut' : 'asteapta');
+      if (!L.raspunsActiv && !L.audioProf && !(L.judecari > 0) && !L.inreg) seteazaStare(L.mut ? 'Microfonul e oprit' : 'Rândul tău', L.mut ? 'mut' : 'asteapta');
       setTimeout(golesteCoadaApp, 300);
       break;
     }
@@ -1782,7 +1891,7 @@ function laEveniment(ev) {
       const m = (ev.error && ev.error.message) || 'eroare';
       if (L.diag && L.diag.erori.length < 20) L.diag.erori.push(m.slice(0, 200));
       if (/role/i.test(m) && L.rolNote === 'system') L.rolNote = 'user';
-      if (/active response/i.test(m)) L.raspunsActiv = true;
+      if (/already has an active response/i.test(m)) L.raspunsActiv = true; // 1.7: nu și „no active response found”, care bloca profesorul
       if (!/cancel|no active response|already|active response/i.test(m)) toast('OpenAI: ' + m, true);
       break;
     }
@@ -1807,7 +1916,9 @@ function pornesteAnaliza() {
   let neted = 0;
   const cadru = () => {
     if (L.faza !== 'live' && L.faza !== 'conectare') return;
-    const v = Math.max(L.mut ? 0 : nivel(L.anMic), nivel(L.anProf) * 1.2);
+    const vm = L.mut ? 0 : nivel(L.anMic);
+    if (L.inreg && !L.inreg.trimit && vm > (L.inreg.nivelMax || 0)) L.inreg.nivelMax = vm;
+    const v = Math.max(vm, nivel(L.anProf) * 1.2);
     neted = neted * 0.75 + Math.min(1, v * 4) * 0.25;
     const o = $('#orb');
     if (o) { o.style.setProperty('--nivel', neted.toFixed(3)); }
@@ -1824,7 +1935,7 @@ function leagaSunetProfesor(stream) {
   } catch (e) { L.anProf = null; }
 }
 async function conecteaza(reluare) {
-  const corp = { mod: L.mod, drum: S.drum || drumImplicit(), viteza: setari.viteza, rabdare: setari.rabdare, zgomot: L.zgomot, intrerupere: false, pasi: true, reluare: reluare || [] };
+  const corp = { mod: L.mod, drum: S.drum || drumImplicit(), viteza: setari.viteza, rabdare: setari.rabdare, zgomot: L.zgomot, intrerupere: false, pasi: true, vorbire: L.vorbire, reluare: reluare || [] };
   if (L.saptamana !== null) corp.saptamana = L.saptamana;
   if (L.scenariu) corp.scenariu = L.scenariu;
   if (L.lectie) corp.lectie = L.lectie;
@@ -1840,11 +1951,11 @@ async function conecteaza(reluare) {
     const lv = $('.live'); if (lv) lv.classList.add('cu-pasi');
     deseneazaPasii();
   }
-  if (L.diag) { L.diag.zgomot = s.zgomot || L.zgomot; L.diag.intrerupere = !!s.intrerupere; L.diag.cu_pasi = !!s.plan; }
+  if (L.diag) { L.diag.zgomot = s.zgomot || L.zgomot; L.diag.intrerupere = !!s.intrerupere; L.diag.cu_pasi = !!s.plan; L.diag.vorbire = s.vorbire || 'automat'; }
   const pc = new RTCPeerConnection();
   const sunet = $('#sunet');
   pc.ontrack = (e) => { sunet.srcObject = e.streams[0]; sunet.play().catch(() => {}); leagaSunetProfesor(e.streams[0]); };
-  L.flux.getAudioTracks().forEach((t) => { t.enabled = !L.mut; pc.addTrack(t, L.flux); });
+  L.flux.getAudioTracks().forEach((t) => { t.enabled = L.vorbire === 'buton' ? !!(L.inreg && !L.inreg.trimit) : !L.mut; pc.addTrack(t, L.flux); });
   const dc = pc.createDataChannel('oai-events');
   dc.onmessage = (e) => { try { laEveniment(JSON.parse(e.data)); } catch (x) { /* ignor */ } };
   dc.onopen = () => {
@@ -1870,7 +1981,8 @@ async function reconecteaza() {
   try {
     if (L.reconectari >= 4) { toast('Legătura a căzut de prea multe ori. Salvez sesiunea.', true); reconectareInCurs = false; await terminaLectia(true); return; }
     L.reconectari += 1;
-    L.raspunsActiv = false; L.audioProf = false; L.vorbeste = false;
+    L.raspunsActiv = false; L.audioProf = false; L.vorbeste = false; L.raspunsDatorat = false;
+    abandoneazaVorbitul();
     seteazaStare('Reconectez…', 'gandeste');
     try { if (L.pc) L.pc.close(); } catch (e) { /* ignor */ }
     L.pc = null; L.dc = null;
@@ -1932,7 +2044,8 @@ async function pornesteLectia(opt) {
     scenariu: (opt && opt.scenariu) || null, numeScenariu: (opt && opt.numeScenariu) || null,
     lectie: (opt && opt.lectie) || null, lectieTitlu: (opt && opt.titlu) || null,
     plan: null, pas: 0, pasInceput: 0, nudge: {}, verif: null, raspunsActiv: false, audioProf: false, vorbeste: false,
-    coadaApp: [], inchidere: null, asteaptaFinal: false, rolNote: 'system', diag: diagNou(), mic: null });
+    coadaApp: [], inchidere: null, asteaptaFinal: false, rolNote: 'system', diag: diagNou(), mic: null,
+    vorbire: setari.vorbire === 'automat' ? 'automat' : 'buton', inreg: null, raspunsDatorat: false });
   location.hash = '#/live';
   document.body.classList.add('in-lectie');
   ecranLive();
@@ -1942,6 +2055,8 @@ async function pornesteLectia(opt) {
     L.faza = 'oprit'; toast(mesajMicrofon(e), true); location.hash = '#/acasa'; return;
   }
   L.mic = infoMicrofon(L.flux);
+  if (L.vorbire === 'buton') L.flux.getAudioTracks().forEach((t) => { t.enabled = false; }); // 1.7: te aude doar cât e pornit butonul
+  if (L.mic.nativ && L.mic.nativ.bt) { const av = $('#aviz-casti'); if (av) { av.textContent = 'Ai căști Bluetooth: pe ele te aude ca la telefon și te prinde prost. Fără ele merge mult mai bine.'; av.hidden = false; } }
   L.zgomot = setari.zgomot === 'auto' || !setari.zgomot ? (L.mic.casti ? 'near_field' : 'far_field') : setari.zgomot;
   L.diag.microfon = L.mic;
   L.diag.setare_microfon = setari.zgomot;
@@ -1971,6 +2086,7 @@ async function pornesteLectia(opt) {
   L.salvare = setInterval(salveazaLocal, 20000);
 }
 function oprireTehnica() {
+  if (L.inreg) { clearInterval(L.inreg.ceas); L.inreg = null; }
   try { if (L.pc) L.pc.close(); } catch (e) { /* ignor */ }
   if (L.flux) L.flux.getTracks().forEach((t) => t.stop());
   L.pc = null; L.dc = null; L.flux = null; L.anMic = null; L.anProf = null;
@@ -2154,7 +2270,8 @@ function foaieSetari() {
   strat('<h2>Setări</h2>' +
     '<label class="setare"><span>Obiectivul zilnic</span><select id="obiectiv">' + [15, 30, 45, 60, 90, 120].map((m) => '<option value="' + m + '"' + (setari.obiectiv === m ? ' selected' : '') + '>' + m + ' minute pe zi</option>').join('') + '</select></label>' +
     '<label class="setare"><span>Viteza profesorului <b id="viteza-val">' + setari.viteza.toFixed(2) + '×</b></span><input type="range" id="viteza" min="0.8" max="1.2" step="0.05" value="' + setari.viteza + '"></label>' +
-    '<label class="setare"><span>Te așteaptă când faci pauze</span><select id="rabdare"><option value="low"' + (setari.rabdare === 'low' ? ' selected' : '') + '>mult (recomandat)</option><option value="medium"' + (setari.rabdare === 'medium' ? ' selected' : '') + '>normal</option></select></label>' +
+    '<label class="setare"><span>Cum vorbești cu profesorul</span><select id="vorbire"><option value="buton"' + (setari.vorbire !== 'automat' ? ' selected' : '') + '>cu butonul (recomandat)</option><option value="automat"' + (setari.vorbire === 'automat' ? ' selected' : '') + '>automat: te ascultă tot timpul</option></select></label>' +
+    '<label class="setare"><span>Doar în modul automat: te așteaptă când faci pauze</span><select id="rabdare"><option value="low"' + (setari.rabdare === 'low' ? ' selected' : '') + '>mult (recomandat)</option><option value="medium"' + (setari.rabdare === 'medium' ? ' selected' : '') + '>normal</option></select></label>' +
     '<label class="setare"><span>Microfonul</span><select id="zgomot"><option value="auto"' + (setari.zgomot === 'auto' ? ' selected' : '') + '>automat: recunosc căștile (recomandat)</option><option value="near_field"' + (setari.zgomot === 'near_field' ? ' selected' : '') + '>căști cu microfon</option><option value="far_field"' + (setari.zgomot === 'far_field' ? ' selected' : '') + '>telefonul în suport sau pe masă</option></select></label>' +
     '<div class="setare"><span>Te aude bine?</span><small class="mic">Citești o propoziție și vezi cât de clar te prinde, cu căștile și fără.</small><button class="buton mic-b" id="test-mic">' + ICON.mic + ' Testează microfonul</button></div>' +
     '<label class="setare comutator"><input type="checkbox" id="ecran"' + (setari.ecran ? ' checked' : '') + '><span>Ține ecranul aprins în timpul lecției</span></label>' +
@@ -2170,6 +2287,7 @@ function foaieSetari() {
     $('#obiectiv').onchange = (e) => { setari.obiectiv = Number(e.target.value); salveazaSetari(); };
     $('#viteza').oninput = (e) => { setari.viteza = Number(e.target.value); $('#viteza-val').textContent = setari.viteza.toFixed(2) + '×'; salveazaSetari(); };
     $('#rabdare').onchange = (e) => { setari.rabdare = e.target.value; salveazaSetari(); };
+    $('#vorbire').onchange = (e) => { setari.vorbire = e.target.value; salveazaSetari(); };
     $('#zgomot').onchange = (e) => { setari.zgomot = e.target.value; salveazaSetari(); };
     $('#test-mic').onclick = () => { inchideStrat(); setTimeout(foaieTestMicrofon, 30); };
     $('#parere').onclick = () => { inchideStrat(); setTimeout(foaieFeedback, 30); };

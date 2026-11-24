@@ -616,3 +616,14 @@ body.in-lectie .toast { bottom: calc(20px + env(safe-area-inset-bottom)); }
 .tm-cuvinte span.lipsa { color: var(--rau); text-decoration: underline dotted; }
 @media (max-width: 380px) { .criterii { grid-template-columns: repeat(3, 1fr); } .pas-chip { font-size: 10px; } }
 .bine svg, .final-live b svg, .verif-sesiune b svg, .card p.mic svg { width: 18px; height: 18px; vertical-align: -3px; flex: none; }
+
+/* ---------- 1.7: butonul de vorbit ---------- */
+.vorbit { width: 100%; display: grid; gap: 2px; margin-top: 18px; }
+.live .vorbit .buton.lat { margin-top: 0; }
+.vorbit-buton { min-height: 64px; font-size: 18px; font-weight: 600; border-radius: 18px; }
+.vorbit-buton svg { width: 22px; height: 22px; }
+.vorbit-buton.inregistreaza { background: #C2362B; border-color: #C2362B; color: #fff; box-shadow: none; animation: puls-rosu 1.2s ease-in-out infinite; }
+.punct-rosu { width: 10px; height: 10px; border-radius: 50%; background: #fff; flex: none; }
+.vorbit-buton > *, .orb-live > * { pointer-events: none; } /* atingerea cade mereu pe buton, nu pe ce e înăuntru */
+.aviz-casti { color: var(--aur); margin: 8px 0 0; }
+.comenzi > :last-child:nth-child(odd) { grid-column: span 2; }
